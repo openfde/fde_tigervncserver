@@ -1,0 +1,4 @@
+usr/bin/Xtigervnc usr/bin
+usr/bin/tigervncserver usr/bin
+etc/vnc.conf etc
+etc/X11/Xvnc-session etc/X11

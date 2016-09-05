@@ -1,0 +1,179 @@
+'\" t
+.\" ** The above line should force tbl to be a preprocessor **
+.\" Man page for Xvnc
+.\"
+.\" Copyright (C), 2006, Joachim.Falk@gmx.de
+.\" Copyright (C), 1998, Marcus.Brinkmann@ruhr-uni-bochum.de
+.\"
+.\" You may distribute under the terms of the GNU General Public
+.\" License as specified in the file COPYING that comes with the
+.\" Debian GNU/Linux distribution.
+.\"
+.TH vnc.conf 5x "December 17th, 2006" "4.1.2" "Virtual Network Computing X client"
+.SH NAME
+vnc.conf \- configuration file for Virtual Network Computing
+.SH SYNOPSIS
+.IR $variable\ \| =\ " someValue """;
+
+.IR $variable\ \| =\ " someValue """;
+
+.IR $variable\ \| .=\ " someValue """;
+
+.IR $variable\ \| =\ \| $var1\ \| .\ \| $var2 ;
+
+.SH DESCRIPTION
+.I /etc/vnc.conf
+is the site wide configuration file for
+.BR vncserver (1),
+the free X server for
+.B Virtual Network Computing
+(VNC). It can be used to change the behavior of the server at startup time,
+although for all values suitable defaults are preset.
+
+.I vnc.conf
+will be parsed by vncserver. Then vncserver will proceed and read
+.IR ~/.vnc/vnc.conf ,
+a file that can be changed on a per-user base. It has the some syntax and
+options as the file described in this document.
+
+.SH EXAMPLES
+A sample example file should come with the Debian package, under
+.IR /usr/share/doc/tigervnc-server/examples/vnc.conf .
+It is pretty self-descriptive, and this document will mainly
+repeat the information that already can be found there.
+
+.SH OVERVIEW
+The file is in
+.BR perl (1)
+syntax, although only variable assignment is allowed for your safety and
+convenience. But there still a variety of possibilities to set the string
+variables.
+
+All variable names are prefixed by `$'. You can assign a string to a
+variable using the `=' operator, and you can append a string to a variable
+using the `.=' operator. You can concatenate two strings using the `.'
+operator. You can substitute variables even inside quotes. You can access
+the environment variables using the notation
+.IR $ENV{VARIABLE} .
+
+You can unset a variable by assigning the empty string "" to it. Use this to
+return the state of the variable from `set' to `use default'.
+
+You may or may not end a line with a semicolon.
+
+.SH OPTIONS
+The options are given with their default value if this is known.
+
+.TP
+.IR $vncClasses\ \| =\ " /var/www/vnc """;
+Should be the path to the java classes of the server.
+.TP
+.IR $XFConfigPath\ \| =\ " /etc/X11/xorg.conf """;
+
+Can be set to the global
+.I xorg.conf 
+file. This will be
+parsed to gain default values for
+.I $fontPath
+and
+.IR $colorPath .
+If you want to disable this feature, point it to an
+invalid file,
+.I /invalid
+for example.
+.TP
+.IR $fontPath
+Should be a comma separated list of fonts to be added to the font
+path. If not specified, and
+.I $XFConfigPath
+is valid, vncserver will read the $fontPath from there. If both are
+not set, the default will apply.
+.TP
+.IR $colorPath
+should be the RGB file to be used by X. This can also be taken from the
+.I XF86Config
+file if specified by
+.IR $XFConfigPath .
+.TP
+.IR $vncUserDir\ \| =\ " $ENV{HOME}/.vnc """;
+Contains the filename for the log files directory of Xvnc
+(the server) and the viewers that are connected to it.
+.TP
+.IR $vncPasswdFile\ \| =\ \| $vncUserDir\ \| .\ " /passwd """;
+Contains the filename of the password file for Xvnc.
+.TP
+.IR $vncStartup\ \| =\ " /etc/X11/XSession """;
+Points to a script that will be started at the very beginning of the Xvnc
+session.
+.TP
+.IR $xauthorityFile\ \| =\ " $ENV{HOME}/.Xauthority """;
+Specifies the path to the X authority file that should be used
+by your Xvnc server.
+.TP
+.IR $defaultDesktopName\ \| =\ " X """;
+Should be set to the default name of the desktop.
+This can be changed at the command line with
+.IR -name .
+.TP
+.I $geometry\ \| =\ " 640x400 """;
+This sets framebuffer width & height. Default will be calculated if
+server is started from within a running X servers. Can be changed at
+the commandline (
+.IR -geometry ).
+A fixed default will be used if vncserver is not invoked in
+a running X session.
+.TP
+.IR $depth\ \| =\ " 16 """;
+.TP
+.IR $pixelformat\ \| =\ " rgb565 """;
+.I $depth
+sets the framebuffer color depth. Must be an integer value between 8 and 32.
+.I $pixelformat
+sets the default pixelformat.
+
+The default values will be calculated if none of both are specified
+and when vncserver is called from within a running X servers.
+Can be changed at the command line with option
+.IR -depth .
+A fixed default value will be used if vncserver is not
+invoked in a running X session.
+.TP
+.I $getDefaultFrom
+This option lets you set the display from which you can query the default of
+the above three options, if you don't want to start vncserver
+from within a running X server. It will be added to the call of xdpyinfo.
+It is useful to get the default from the X server you will run xvncviewer
+in, because the data has not to be recalculated then.
+
+.I $getDefaultFrom\ \| =\ " \-display\ localhost:0 """;
+is an example how to do this.
+.TP
+.IR $rfbwait\ \| =\ " 120000 """;
+Sets the maximum time in msec to wait for vnc client viewer.
+
+.SH FILES
+.TP
+.B /usr/bin/vncserver
+A wrapper script around
+.B Xvnc
+to start the server with appropriate defaults.
+.TP
+.TP
+.B /usr/bin/vncpasswd
+Command to create and change password files to be used by the RFB protocol
+(can be specified in the
+.I $vncPasswdFile
+variable).
+.B /usr/bin/Xvnc
+The real server. Will be invoked by vncserver.
+.SH "SEE ALSO"
+.BR Xvnc (1x),
+.BR vncserver (1x),
+.BR x0vncserver (1x),
+.BR vncpasswd (1x),
+.BR vncviewer (1).
+
+.SH AUTHOR
+2006 \- Modified for vnc 4.1.2 by Joachim Falk (Joachim.falk@gmx.de)
+1998 \- Originally written by Marcus Brinkmann (Marcus.Brinkmann@ruhr-uni-bochum.de)
+for the Debian GNU/Linux Distribution.
