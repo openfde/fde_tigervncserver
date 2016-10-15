@@ -7,9 +7,7 @@ if [ "$1" = "remove" ] ; then
 
   for tiger in x0tigervncserver; do
     notiger=`echo $tiger | sed -e 's/tiger//'`;
-    if [ -f $bindir/$tiger ]; then
-      update-alternatives --remove $notiger $bindir/$tiger
-    fi
+    update-alternatives --remove $notiger $bindir/$tiger
   done
 fi
 

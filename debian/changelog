@@ -1,3 +1,13 @@
+tigervnc (1.6.0+dfsg-3) unstable; urgency=medium
+
+  * Vncviewer alternatives are now correctly removed at package removal.
+    Closes: #840828.
+  * Improved the debian/rules clean target.
+  * Update alternatives gracefully handle non-existing files so the check
+    is removed to ensure it is called in all cases.
+
+ -- Ola Lundqvist <opal@debian.org>  Sat, 15 Oct 2016 22:42:51 +0200
+
 tigervnc (1.6.0+dfsg-2) unstable; urgency=medium
 
   [ Ola Lundqvist ]
