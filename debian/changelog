@@ -1,3 +1,9 @@
+tigervnc (1.6.0+dfsg-4) unstable; urgency=medium
+
+  * Re-build to solve library dependency problem. Closes: #841288.
+
+ -- Ola Lundqvist <opal@debian.org>  Thu, 20 Oct 2016 22:39:36 +0200
+
 tigervnc (1.6.0+dfsg-3) unstable; urgency=medium
 
   * Vncviewer alternatives are now correctly removed at package removal.
