@@ -14,17 +14,18 @@
 # 0902-Add-RH-patch-tigervnc11-rh645755.patch-fix-signal-in.patch
 # 0903-Add-RH-patch-tigervnc11-rh628054-xorg.patch-which-fi.patch has been applied upstream
 0904-Added-RH-patch-tigervnc11-rh588342.patch-which-fixes.patch
+# Almost completely applied upstream
 0905-Added-RH-patch-tigervnc11-rh690245.patch-which-add-T.patch
 # applied upstream
 #0906-Added-RH-patch-tigervnc11-ldnow.patch-disabling-lazy.patch
 find-fltk-libs.diff
 fix-linking.diff
 
-f/tigervnc-cookie.patch
+#f/tigervnc-cookie.patch # already applied
 # f/tigervnc11-ldnow.patch # already applied
 f/tigervnc11-gethomedir.patch
 # f/tigervnc11-rh692048.patch # already applied
-f/tigervnc-inetd-nowait.patch
+# f/tigervnc-inetd-nowait.patch # already applied
 # f/tigervnc-setcursor-crash.patch no longer applicable
 # f/tigervnc-manpages.patch # disable for now
 # yoh: purpose is not clear and would need adjustment
@@ -38,4 +39,7 @@ f/tigervnc-cursor.patch
 # f/xserver-1.16.patch # obsoleted by tigervnc 1.4.1 release
 # f/tigervnc-inputreset.patch # already applied
 # f/tigervnc-pointersync.patch # needs fixing
-fix-build-error-with-xserver-1.18.patch
+# fix-build-error-with-xserver-1.18.patch # applied upstream
+fix-build-error-with-xserver-1.19.patch
+v2-Add-xorg-xserver-1.19-support-to-tigervnc.patch
+CVE-2014-8240-849479.patch

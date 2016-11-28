@@ -3,6 +3,9 @@
 #
 
 cmake_minimum_required(VERSION 2.8)
+if(POLICY CMP0022)
+  cmake_policy(SET CMP0022 OLD)
+endif()
 
 # Internal cmake modules
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
@@ -18,10 +21,10 @@ include(CheckCSourceRuns)
 include(CMakeMacroLibtoolFile)
 
 project(tigervnc)
-set(VERSION 1.6.0)
+set(VERSION 1.7.0)
 
 # The RC version must always be four comma-separated numbers
-set(RCVERSION 1,6,0,0)
+set(RCVERSION 1,7,0,0)
 
 # Installation paths
 set(BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin")
@@ -80,13 +83,19 @@ if(ENABLE_ASAN AND NOT WIN32 AND NOT APPLE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 endif()
 
+option(ENABLE_TSAN "Enable thread sanitizer support" OFF)
+if(ENABLE_TSAN AND NOT WIN32 AND NOT APPLE AND CMAKE_SIZEOF_VOID_P MATCHES 8)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=thread")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
+endif()
+
 if(NOT DEFINED BUILD_WINVNC)
   set(BUILD_WINVNC 1)
 endif()
 
-# Minimum version is Windows XP SP2 (5.2)
+# Minimum version is Windows Vista/2008 (6.0)
 if(WIN32)
-  add_definitions(-D_WIN32_IE=0x0502 -D_WIN32_WINNT=0x0502)
+  add_definitions(-D_WIN32_WINNT=0x0600)
 endif()
 
 if(CMAKE_SIZEOF_VOID_P MATCHES 8)
@@ -140,18 +149,22 @@ if(ENABLE_NLS)
     find_path(GETTEXT_INCLUDE_DIR libintl.h)
     if(GETTEXT_INCLUDE_DIR)
       set(CMAKE_REQUIRED_LIBRARIES ${ICONV_LIBRARIES})
+      set(CMAKE_REQUIRED_FLAGS -fno-builtin-dgettext)
       check_function_exists(dgettext LIBC_HAS_DGETTEXT)
       if(LIBC_HAS_DGETTEXT)
         set(GETTEXT_FOUND TRUE)
       else()
         find_library(LIBINTL_LIBRARY NAMES intl libintl)
-        check_library_exists(${LIBINTL_LIBRARY} "dgettext" "" LIBINTL_HAS_DGETTEXT)
-        if(LIBINTL_HAS_DGETTEXT)
-          set(GETTEXT_LIBRARIES ${LIBINTL_LIBRARY} ${ICONV_LIBRARIES})
-          set(GETTEXT_FOUND TRUE)
+        if(LIBINTL_LIBRARY)
+          check_library_exists(${LIBINTL_LIBRARY} "dgettext" "" LIBINTL_HAS_DGETTEXT)
+          if(LIBINTL_HAS_DGETTEXT)
+            set(GETTEXT_LIBRARIES ${LIBINTL_LIBRARY} ${ICONV_LIBRARIES})
+            set(GETTEXT_FOUND TRUE)
+          endif()
         endif()
       endif()
       set(CMAKE_REQUIRED_LIBRARIES)
+      set(CMAKE_REQUIRED_FLAGS)
     endif()
   endif()
 

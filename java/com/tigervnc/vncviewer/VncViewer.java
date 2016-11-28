@@ -56,7 +56,7 @@ public class VncViewer extends javax.swing.JApplet
 
   public static final String aboutText = new String("TigerVNC Java Viewer v%s (%s)%n"+
                                                     "Built on %s at %s%n"+
-                                                    "Copyright (C) 1999-2015 TigerVNC Team and many others (see README.txt)%n"+
+                                                    "Copyright (C) 1999-2016 TigerVNC Team and many others (see README.txt)%n"+
                                                     "See http://www.tigervnc.org for information on TigerVNC.");
 
   public static String version = null;
@@ -165,13 +165,6 @@ public class VncViewer extends javax.swing.JApplet
         if (++i >= argv.length) usage();
         System.err.println("Log setting: "+argv[i]);
         LogWriter.setLogParams(argv[i]);
-        continue;
-      }
-
-      if (argv[i].equalsIgnoreCase("-tunnel") || argv[i].equalsIgnoreCase("-via")) {
-        if (!tunnel.createTunnel(argv.length, argv, i))
-          exit(1);
-        if (argv[i].equalsIgnoreCase("-via")) i++;
         continue;
       }
 
@@ -614,30 +607,71 @@ public class VncViewer extends javax.swing.JApplet
                       "Produce a system beep when requested to by the server.",
                       true);
   StringParameter via
-  = new StringParameter("via",
+  = new StringParameter("Via",
     "Automatically create an encrypted TCP tunnel to "+
-    "machine gateway, then use that tunnel to connect "+
-    "to a VNC server running on host. By default, "+
-    "this option invokes SSH local port forwarding and "+
-    "assumes that the SSH client binary is located at "+
-    "/usr/bin/ssh. Note that when using the -via "+
-    "option, the host machine name should be specified "+
-    "from the point of view of the gateway machine. "+
-    "For example, \"localhost\" denotes the gateway, "+
-    "not the machine on which vncviewer was launched. "+
+    "the gateway machine, then connect to the VNC host "+
+    "through that tunnel. By default, this option invokes "+
+    "SSH local port forwarding using the embedded JSch "+
+    "client, however an external SSH client may be specified "+
+    "using the \"-extSSH\" parameter. Note that when using "+
+    "the -via option, the VNC host machine name should be "+
+    "specified from the point of view of the gateway machine, "+
+    "e.g. \"localhost\" denotes the gateway, "+
+    "not the machine on which the viewer was launched. "+
     "See the System Properties section below for "+
-    "information on configuring the -via option.",
+    "information on configuring the -Via option.", null);
+  BoolParameter tunnel
+  = new BoolParameter("Tunnel",
+    "The -Tunnel command is basically a shorthand for the "+
+    "-via command when the VNC server and SSH gateway are "+
+    "one and the same. -Tunnel creates an SSH connection "+
+    "to the server and forwards the VNC through the tunnel "+
+    "without the need to specify anything else.", false);
+  BoolParameter extSSH
+  = new BoolParameter("extSSH",
+    "By default, SSH tunneling uses the embedded JSch client "+
+    "for tunnel creation. This option causes the client to "+
+    "invoke an external SSH client application for all tunneling "+
+    "operations. By default, \"/usr/bin/ssh\" is used, however "+
+    "the path to the external application may be specified using "+
+    "the -SSHClient option.", false);
+  StringParameter extSSHClient
+  = new StringParameter("extSSHClient",
+    "Specifies the path to an external SSH client application "+
+    "that is to be used for tunneling operations when the -extSSH "+
+    "option is in effect.", "/usr/bin/ssh");
+  StringParameter extSSHArgs
+  = new StringParameter("extSSHArgs",
+    "Specifies the arguments string or command template to be used "+
+    "by the external SSH client application when the -extSSH option "+
+    "is in effect. The string will be processed according to the same "+
+    "pattern substitution rules as the VNC_TUNNEL_CMD and VNC_VIA_CMD "+
+    "system properties, and can be used to override those in a more "+
+    "command-line friendly way. If not specified, then the appropriate "+
+    "VNC_TUNNEL_CMD or VNC_VIA_CMD command template will be used.", null);
+  StringParameter sshConfig
+  = new StringParameter("SSHConfig",
+    "Specifies the path to an OpenSSH configuration file that to "+
+    "be parsed by the embedded JSch SSH client during tunneling "+
+    "operations.", FileUtils.getHomeDir()+".ssh/config");
+  StringParameter sshKey
+  = new StringParameter("SSHKey",
+    "When using the Via or Tunnel options with the embedded SSH client, "+
+    "this parameter specifies the text of the SSH private key to use when "+
+    "authenticating with the SSH server. You can use \\n within the string "+
+    "to specify a new line.", null);
+  StringParameter sshKeyFile
+  = new StringParameter("SSHKeyFile",
+    "When using the Via or Tunnel options with the embedded SSH client, "+
+    "this parameter specifies a file that contains an SSH private key "+
+    "(or keys) to use when authenticating with the SSH server. If not "+
+    "specified, ~/.ssh/id_dsa or ~/.ssh/id_rsa will be used (if they exist). "+
+    "Otherwise, the client will fallback to prompting for an SSH password.",
     null);
-
-  StringParameter tunnelMode
-  = new StringParameter("tunnel",
-    "Automatically create an encrypted TCP tunnel to "+
-    "remote gateway, then use that tunnel to connect "+
-    "to the specified VNC server port on the remote "+
-    "host. See the System Properties section below "+
-    "for information on configuring the -tunnel option.",
-    null);
-
+  StringParameter sshKeyPass
+  = new StringParameter("SSHKeyPass",
+    "When using the Via or Tunnel options with the embedded SSH client, "+
+    "this parameter specifies the passphrase for the SSH key.", null);
   BoolParameter customCompressLevel
   = new BoolParameter("CustomCompressLevel",
                       "Use custom compression level. "+
@@ -657,7 +691,17 @@ public class VncViewer extends javax.swing.JApplet
                      "JPEG quality level. "+
                      "0 = Low, 9 = High",
                      8);
-
+  StringParameter x509ca
+  = new StringParameter("X509CA",
+    "Path to CA certificate to use when authenticating remote servers "+
+    "using any of the X509 security schemes (X509None, X509Vnc, etc.). "+
+    "Must be in PEM format.",
+    FileUtils.getHomeDir()+".vnc/x509_ca.pem");
+  StringParameter x509crl
+  = new StringParameter("X509CRL",
+    "Path to certificate revocation list to use in conjunction with "+
+    "-X509CA. Must also be in PEM format.",
+    FileUtils.getHomeDir()+".vnc/x509_crl.pem");
   StringParameter config
   = new StringParameter("config",
   "Specifies a configuration file to load.", null);
@@ -665,5 +709,5 @@ public class VncViewer extends javax.swing.JApplet
   Thread thread;
   Socket sock;
   static int nViewers;
-  static LogWriter vlog = new LogWriter("main");
+  static LogWriter vlog = new LogWriter("VncViewer");
 }

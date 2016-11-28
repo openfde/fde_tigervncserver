@@ -12,28 +12,11 @@ communication between a server and a viewer. (BZ#653491)
  common/rfb/SecurityServer.cxx |    2 +-
  3 files changed, 2 insertions(+), 5 deletions(-)
 
---- a/common/rfb/Security.cxx
-+++ b/common/rfb/Security.cxx
-@@ -74,7 +74,6 @@
-   list<rdr::U8> result;
-   list<U32>::iterator i;
- 
--  result.push_back(secTypeVeNCrypt);
-   for (i = enabledSecTypes.begin(); i != enabledSecTypes.end(); i++)
-     if (*i < 0x100)
-       result.push_back(*i);
-@@ -112,8 +111,6 @@
-   for (i = enabledSecTypes.begin(); i != enabledSecTypes.end(); i++)
-     if (*i == secType)
-       return true;
--  if (secType == secTypeVeNCrypt)
--    return true;
- 
-   return false;
- }
---- a/common/rfb/SecurityClient.cxx
-+++ b/common/rfb/SecurityClient.cxx
-@@ -49,7 +49,7 @@
+Index: pkg-tigervnc/common/rfb/SecurityClient.cxx
+===================================================================
+--- pkg-tigervnc.orig/common/rfb/SecurityClient.cxx
++++ pkg-tigervnc/common/rfb/SecurityClient.cxx
+@@ -49,7 +49,7 @@ StringParameter SecurityClient::secTypes
  #endif
   ")",
  #ifdef HAVE_GNUTLS
@@ -42,9 +25,11 @@ communication between a server and a viewer. (BZ#653491)
  #else
   "VncAuth,None",
  #endif
---- a/common/rfb/SecurityServer.cxx
-+++ b/common/rfb/SecurityServer.cxx
-@@ -43,7 +43,7 @@
+Index: pkg-tigervnc/common/rfb/SecurityServer.cxx
+===================================================================
+--- pkg-tigervnc.orig/common/rfb/SecurityServer.cxx
++++ pkg-tigervnc/common/rfb/SecurityServer.cxx
+@@ -43,7 +43,7 @@ StringParameter SecurityServer::secTypes
  #endif
   ")",
  #ifdef HAVE_GNUTLS

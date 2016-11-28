@@ -12,7 +12,7 @@
 
 Name: tigervnc
 Version: @VERSION@
-Release: 1%{?snap:.%{snap}}%{?dist}
+Release: 3%{?snap:.%{snap}}%{?dist}
 Summary: A TigerVNC remote display system
 
 Group: User Interface/Desktops
@@ -23,7 +23,6 @@ URL: http://www.tigervnc.com
 Source0: %{name}-%{version}%{?snap:-%{snap}}.tar.bz2
 Source1: vncserver.service
 Source2: vncserver.sysconfig
-Source6: vncviewer.desktop
 Source9: FindX11.cmake
 Source11: http://fltk.org/pub/fltk/1.3.3/fltk-1.3.3-source.tar.gz
 Source12: http://downloads.sourceforge.net/project/libjpeg-turbo/1.4.2/libjpeg-turbo-1.4.2.tar.gz
@@ -116,7 +115,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 # xorg requires newer versions of automake, & autoconf than are available with el5. Use el6 versions.
 BuildRequires: automake >= 1.11, autoconf >= 2.60, libtool >= 1.4, gettext >= 0.14.4, gettext-devel >= 0.14.4, bison-devel, python26
-BuildRequires: desktop-file-utils, java-devel, jpackage-utils
+BuildRequires: java-devel, jpackage-utils
 BuildRequires: pam-devel
 BuildRequires: cmake28
 BuildRequires: pkgconfig >= 0.20
@@ -128,6 +127,7 @@ BuildRequires: kernel-headers, libatomic_ops-devel
 BuildRequires: xz
 %if !%{_bootstrap}
 BuildRequires: %{name}-static-devel == %{version}
+BuildRequires: nasm >= 2.01
 %endif
 
 Requires(post): initscripts chkconfig coreutils
@@ -141,7 +141,6 @@ Provides: tightvnc = 1.5.0-0.15.20090204svn3586
 Obsoletes: tightvnc < 1.5.0-0.15.20090204svn3586
 
 # tigervnc patches
-Patch4: tigervnc-cookie.patch
 Patch12: tigervnc14-static-build-fixes.patch
 Patch13: tigervnc14-Add-dridir-param.patch
 Patch14: tigervnc14-Add-xkbcompdir-param.patch
@@ -298,7 +297,6 @@ rm -rf %{_builddir}/%{name}-%{version}%{?snap:-%{snap}}
 cp %SOURCE9 cmake/Modules/
 sed -i -e "s#@_includedir@#%{xorg_buildroot}%{_includedir}#" cmake/Modules/FindX11.cmake
 sed -i -e "s#@_libdir@#%{xorg_buildroot}%{_libdir}#" cmake/Modules/FindX11.cmake
-%patch4 -p1 -b .cookie
 %patch12 -p1 -b .static-build-fixes
 
 %if %{_bootstrap}
@@ -460,7 +458,7 @@ popd
 %build
 export CC=gcc44
 export CXX=g++44
-export CFLAGS="$RPM_OPT_FLAGS -fPIC"
+export CFLAGS="-g $RPM_OPT_FLAGS -fPIC"
 export CXXFLAGS="$CFLAGS -static-libgcc"
 export PYTHON=python26
 
@@ -712,7 +710,6 @@ for module in ${modules}; do
   fi
   if [ "${module}" = "libX11" ]; then
     autoreconf -fiv
-    sed -i -e 's|^\(#pragma weak pthread_equal.*\)$||' src/UIThrStubs.c
     extraoptions="${extraoptions} --disable-specs"
   fi
   if [ "${module}" = "libSM" ]; then
@@ -736,7 +733,7 @@ for module in ${modules}; do
   elif [ "${module}" = "libXt" ]; then
     LDFLAGS="$LDFLAGS -static" PKG_CONFIG="pkg-config --static" CFLAGS="$CFLAGS -fno-strict-aliasing" ./configure --host=%{_host} --build=%{_build} --prefix=%{_prefix} --libdir=%{_libdir} ${extraoptions} --enable-static --disable-shared --with-pic --with-xfile-search-path="%{_sysconfdir}/X11/%%L/%%T/%%N%%C%%S:%{_sysconfdir}/X11/%%l/%%T/\%%N%%C%%S:%{_sysconfdir}/X11/%%T/%%N%%C%%S:%{_sysconfdir}/X11/%%L/%%T/%%N%%S:%{_sysconfdir}/X\11/%%l/%%T/%%N%%S:%{_sysconfdir}/X11/%%T/%%N%%S:%{_datadir}/X11/%%L/%%T/%%N%%C%%S:%{_datadir}/X1\1/%%l/%%T/%%N%%C%%S:%{_datadir}/X11/%%T/%%N%%C%%S:%{_datadir}/X11/%%L/%%T/%%N%%S:%{_datadir}/X11/%%\l/%%T/%%N%%S:%{_datadir}/X11/%%T/%%N%%S"
   elif [ "${module}" = "libX11" ]; then
-    LDFLAGS="$LDFLAGS -static" PKG_CONFIG="pkg-config --static" ./configure --host=%{_host} --build=%{_build} --prefix=%{_prefix} --libdir=%{_libdir} ${extraoptions} --enable-static --disable-shared --with-pic
+    LDFLAGS="$LDFLAGS -lpthread" PKG_CONFIG="pkg-config --static" ./configure --host=%{_host} --build=%{_build} --prefix=%{_prefix} --libdir=%{_libdir} ${extraoptions} --disable-static --enable-shared --with-pic
   elif [ "${module}" = "libXtst" ]; then
     LDFLAGS="$LDFLAGS -static" PKG_CONFIG="pkg-config --static" ./configure --host=%{_host} --build=%{_build} --prefix=%{_prefix} --libdir=%{_libdir} ${extraoptions} --enable-static --disable-shared --with-pic
   elif [ "${module}" = "libXpm" ]; then
@@ -789,7 +786,7 @@ autoreconf -fiv
 %endif
 
 # link libGL statically against any xorg libraries built above
-LDFLAGS="$LDFLAGS -Wl,-Bstatic -lxcb -lX11 -lXdmcp -lXau -lXext -lXxf86vm -ldrm -Wl,-Bdynamic -Wl,-rpath,"'\$$'"ORIGIN/../..%{_libdir}/tigervnc:%{_libdir}/tigervnc:%{_libdir}" \
+LDFLAGS="$LDFLAGS -Wl,-Bstatic -lxcb -lXdmcp -lXau -lXext -lXxf86vm -ldrm -Wl,-Bdynamic -lX11 -lpthread -Wl,-rpath,"'\$$'"ORIGIN/../..%{_libdir}/tigervnc:%{_libdir}/tigervnc:%{_libdir}" \
 PKG_CONFIG="pkg-config --static" ./configure %{common_flags} \
     --host=%{_host} \
     --build=%{_build} \
@@ -950,21 +947,6 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/init.d
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
 install -m644 %{SOURCE1} $RPM_BUILD_ROOT%{_sysconfdir}/init.d/vncserver
 install -m644 %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/vncservers
-
-# Install desktop stuff
-mkdir -p $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/{16x16,24x24,48x48}/apps
-
-pushd media/icons
-for s in 16 24 48; do
-install -m644 tigervnc_$s.png $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/${s}x$s/apps/tigervnc.png
-done
-popd
-
-mkdir $RPM_BUILD_ROOT%{_datadir}/applications
-desktop-file-install \
-	--dir $RPM_BUILD_ROOT%{_datadir}/applications \
-	--vendor="" \
-	%{SOURCE6}
 
 # Install Java applet
 pushd java

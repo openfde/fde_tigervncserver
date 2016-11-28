@@ -67,11 +67,6 @@ SConnection::SConnection()
 SConnection::~SConnection()
 {
   if (ssecurity) ssecurity->destroy();
-  deleteReaderAndWriter();
-}
-
-void SConnection::deleteReaderAndWriter()
-{
   delete reader_;
   reader_ = 0;
   delete writer_;
@@ -224,8 +219,8 @@ void SConnection::processSecurityMsg()
     bool done = ssecurity->processMsg(this);
     if (done) {
       state_ = RFBSTATE_QUERYING;
-      queryConnection(ssecurity->getUserName());
       setAccessRights(ssecurity->getAccessRights());
+      queryConnection(ssecurity->getUserName());
     }
   } catch (AuthFailureException& e) {
     vlog.error("AuthFailureException: %s", e.str());

@@ -102,7 +102,7 @@ static const char *about_text()
              "Copyright (C) 1999-%d TigerVNC Team and many others (see README.txt)\n"
              "See http://www.tigervnc.org for information on TigerVNC."),
            (int)sizeof(size_t)*8, PACKAGE_VERSION,
-           BUILD_TIMESTAMP, 2015);
+           BUILD_TIMESTAMP, 2016);
 
   return buffer;
 }
@@ -126,6 +126,20 @@ void about_vncviewer()
 {
   fl_message_title(_("About TigerVNC Viewer"));
   fl_message("%s", about_text());
+}
+
+void run_mainloop()
+{
+  int next_timer;
+
+  next_timer = Timer::checkTimeouts();
+  if (next_timer == 0)
+    next_timer = INT_MAX;
+
+  if (Fl::wait((double)next_timer / 1000.0) < 0.0) {
+    vlog.error(_("Internal FLTK error. Exiting."));
+    exit(-1);
+  }
 }
 
 #ifdef __APPLE__
@@ -590,18 +604,8 @@ int main(int argc, char** argv)
 
   CConn *cc = new CConn(vncServerName, sock);
 
-  while (!exitMainloop) {
-    int next_timer;
-
-    next_timer = Timer::checkTimeouts();
-    if (next_timer == 0)
-      next_timer = INT_MAX;
-
-    if (Fl::wait((double)next_timer / 1000.0) < 0.0) {
-      vlog.error(_("Internal FLTK error. Exiting."));
-      break;
-    }
-  }
+  while (!exitMainloop)
+    run_mainloop();
 
   delete cc;
 

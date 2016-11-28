@@ -1,3 +1,17 @@
+tigervnc (1.7.0-1) unstable; urgency=high
+
+  * Fresh upstream that help to solve #843543.
+   - Modified a special patch for VeNCrypt support as it all parts that made
+     sense is already in there.
+   - Removed a few patches that are already applied upstream.
+   - Did quilt refresh on a few more.
+  * Correction to make it build against xorg source 1.19. Closes: #843543.
+  * Security correction for CVE-2014-8240 that corrects an integer overflow
+    flaw, leading to a heap-based buffer overflow in screen size handling.
+    Closes: #849479.
+
+ -- Ola Lundqvist <opal@debian.org>  Mon, 28 Nov 2016 23:20:20 +0100
+
 tigervnc (1.6.0+dfsg-4) unstable; urgency=medium
 
   * Re-build to solve library dependency problem. Closes: #841288.

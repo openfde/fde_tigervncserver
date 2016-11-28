@@ -10,7 +10,7 @@
 
 Name: tigervnc
 Version: @VERSION@
-Release: 1%{?snap:.%{snap}}%{?dist}
+Release: 5%{?snap:.%{snap}}%{?dist}
 Summary: A TigerVNC remote display system
 
 Group: User Interface/Desktops
@@ -21,7 +21,6 @@ URL: http://www.tigervnc.com
 Source0: %{name}-%{version}%{?snap:-%{snap}}.tar.bz2
 Source1: vncserver.service
 Source2: vncserver.sysconfig
-Source6: vncviewer.desktop
 Source11: http://fltk.org/pub/fltk/1.3.3/fltk-1.3.3-source.tar.gz
 Source13: http://downloads.sourceforge.net/project/libpng/libpng15/1.5.24/libpng-1.5.24.tar.bz2
 Source14: https://ftp.gnu.org/gnu/gmp/gmp-6.0.0a.tar.bz2
@@ -38,7 +37,7 @@ BuildRequires: libdrm-devel, libXt-devel, pixman-devel libXfont-devel
 BuildRequires: libxkbfile-devel, openssl-devel, libpciaccess-devel
 BuildRequires: mesa-libGL-devel, libXinerama-devel, ImageMagick
 BuildRequires: freetype-devel, libXdmcp-devel
-BuildRequires: desktop-file-utils, java-devel, jpackage-utils
+BuildRequires: java-devel, jpackage-utils
 BuildRequires: libjpeg-turbo-devel, pam-devel
 BuildRequires: cmake >= 2.8
 %if !%{_bootstrap}
@@ -60,8 +59,8 @@ Obsoletes: vnc < 4.1.3-2, vnc-libs < 4.1.3-2
 Provides: tightvnc = 1.5.0-0.15.20090204svn3586
 Obsoletes: tightvnc < 1.5.0-0.15.20090204svn3586
 
-Patch4: tigervnc-cookie.patch
 Patch16: tigervnc-xorg-manpages.patch
+Patch17: nettle-2.7.1-ecc-cve.patch
 
 %description
 Virtual Network Computing (VNC) is a remote display system which
@@ -161,14 +160,15 @@ This package contains static development files necessary to build TigerVNC
 rm -rf $RPM_BUILD_ROOT
 %setup -q -n %{name}-%{version}%{?snap:-%{snap}}
 
-%patch4 -p1 -b .cookie
-
 %if %{_bootstrap}
 tar xzf %SOURCE11
 tar xjf %SOURCE13
 tar xjf %SOURCE14
 tar xzf %SOURCE15
 tar xzf %SOURCE16
+pushd nettle-*
+%patch17 -p1 -b .ecc-cve
+popd
 xzcat %SOURCE17 | tar xf -
 %endif
 
@@ -177,7 +177,7 @@ pushd unix/xserver
 for all in `find . -type f -perm -001`; do
 	chmod -x "$all"
 done
-patch -p1 -b --suffix .vnc < ../xserver115.patch
+patch -p1 -b --suffix .vnc < ../xserver117.patch
 popd
 
 %patch16 -p0 -b .man
@@ -339,7 +339,7 @@ pushd java
 	-DJAVA_KEY_ALIAS=%{_key_alias} \
 	-DJAVA_STOREPASS=":env STOREPASS" \
 	-DJAVA_KEYPASS=":env KEYPASS" \
-	-DJAVA_TSA_URL=https://timestamp.geotrust.com/tsa .
+	-DJAVA_TSA_URL=http://timestamp.geotrust.com/tsa .
 %endif
 
 JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF8" make
@@ -367,20 +367,6 @@ mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/init.d
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
 install -m644 %{SOURCE1} $RPM_BUILD_ROOT%{_sysconfdir}/init.d/vncserver
 install -m644 %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/vncservers
-
-# Install desktop stuff
-mkdir -p $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/{16x16,24x24,48x48}/apps
-
-pushd media/icons
-for s in 16 24 48; do
-install -m644 tigervnc_$s.png $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/${s}x$s/apps/tigervnc.png
-done
-popd
-
-mkdir $RPM_BUILD_ROOT%{_datadir}/applications
-desktop-file-install \
-	--dir $RPM_BUILD_ROOT%{_datadir}/applications \
-	%{SOURCE6}
 
 # Install Java applet
 pushd java
@@ -474,6 +460,12 @@ fi
 %endif
 
 %changelog
+* Mon Jun 20 2016 Brian P. Hinz <bphinz@users.sourceforge.net> 1.6.80-5
+- Patch for Xorg 1.17 due to vendor bump of Xorg version
+
+* Sat Apr 02 2016 Brian P. Hinz <bphinz@users.sourceforge.net> 1.6.80-4
+- Fixed CVE-2015-8803 CVE-2015-8804 CVE-2015-8805 secp256r1 and secp384r1 bugs
+
 * Fri Dec 11 2015 Brian P. Hinz <bphinz@users.sourceforge.net> 1.6.80-3
 - Configure with --host and --build to avoid build host-specific compiler opts
 
