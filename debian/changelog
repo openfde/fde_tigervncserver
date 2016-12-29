@@ -1,3 +1,11 @@
+tigervnc (1.7.0-2) unstable; urgency=high
+
+  * Most of CVE-2014-8241 was already corrected but this update correct
+    one missing part of that CVE. Closes: #849478.
+  * Added a versioned dependency on xorg source.
+
+ -- Ola Lundqvist <opal@debian.org>  Thu, 29 Dec 2016 22:04:35 +0000
+
 tigervnc (1.7.0-1) unstable; urgency=high
 
   * Fresh upstream that help to solve #843543.

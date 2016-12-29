@@ -43,3 +43,4 @@ f/tigervnc-cursor.patch
 fix-build-error-with-xserver-1.19.patch
 v2-Add-xorg-xserver-1.19-support-to-tigervnc.patch
 CVE-2014-8240-849479.patch
+CVE-2014-8241-849478.patch

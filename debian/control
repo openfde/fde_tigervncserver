@@ -27,7 +27,7 @@ Build-Depends:
  libxcursor-dev,
  libwrap0-dev,
  libfltk1.3-dev (>= 1.3.3),
- xorg-server-source,
+ xorg-server-source (>= 2:1.19),
  xserver-xorg-dev,
 # this are dependencies from xorg deb
  debhelper (>= 9),
