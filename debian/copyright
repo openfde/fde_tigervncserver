@@ -69,7 +69,7 @@ License: GPL-3+
  '/usr/share/common-licenses/GPL-3'.
 
 Files: java/com/jcraft/*
-Copyright: 2000-2012 ymnk, JCraft,Inc. All rights reserved.
+Copyright: 2000-2015 ymnk, JCraft,Inc. All rights reserved.
 License: BSD-3-Clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:

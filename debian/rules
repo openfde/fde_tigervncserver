@@ -165,7 +165,7 @@ reverse-patches-remove-xorg-from-vnc-tree:
 
 configure/tigervnc-standalone-server configure/tigervnc-xorg-extension:: $(DEB_BUILDDIR)/unix/xserver/configure.stamp
 
-include /usr/share/xserver-xorg/configure_flags.mk
+-include /usr/share/xserver-xorg/configure_flags.mk
 
 xserver_confflags := $(shell echo '$(xserver_confflags)' | sed 's/--with-builderstring="[^"]*"//')
 XORG_DEBIAN_CONFIGURE_FLAGS = \

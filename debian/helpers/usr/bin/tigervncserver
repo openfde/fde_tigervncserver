@@ -3,7 +3,7 @@
 #
 # vncserver - wrapper script to start an X VNC server.
 #
-# Copyright (C) 2004-2006 Joachim Falk <joachim.falk@gmx.de>
+# Copyright (C) 2004-2016 Joachim Falk <joachim.falk@gmx.de>
 # Please report all errors to Joachim Falk and not to OL.
 #
 # This file is based on a vncserver script provided by:
@@ -80,7 +80,7 @@ use Time::HiRes qw(usleep);
 use Errno qw(:POSIX);
 use POSIX ":sys_wait_h";
 
-use vars qw($HOST $PROG %CMDS);
+use vars qw($HOST $HOSTFQDN $PROG %CMDS);
 
 #
 # Set global constants
@@ -88,6 +88,14 @@ use vars qw($HOST $PROG %CMDS);
 
 # Get the program name
 $PROG = basename($0);
+
+sub getCommand {
+  my ($cmd) = @_;
+  return $CMDS{$cmd} if defined $CMDS{$cmd};
+  print STDERR "$PROG: Couldn't find \"$cmd\" on your PATH.\n";
+  print STDERR "\tPlease install the tigervnc-common package!\n";
+  exit 1;
+}
 
 #
 # Routine to make sure we're operating in a sane environment.
@@ -101,15 +109,27 @@ sub sanityCheck {
   #
   %CMDS = ();
 cmd:
-  foreach my $cmd ("uname","xauth","Xtigervnc","tigervncpasswd") {
+  foreach my $cmd ("hostname","xauth","Xtigervnc") {
     foreach my $dir ($binbase, split(/:/,$ENV{PATH})) {
-      $CMDS{$cmd} = File::Spec->catfile($dir, $cmd);
-      next cmd if -x $CMDS{$cmd};
+      my $fqcmd = File::Spec->catfile($dir, $cmd);
+      if (-x $fqcmd) {
+        $CMDS{$cmd} = $fqcmd;
+	next cmd;
+      }
     }
-    print STDERR "$PROG: couldn't find \"$cmd\" on your PATH.\n";
+    print STDERR "$PROG: Couldn't find \"$cmd\" on your PATH.\n";
     exit 1;
   }
-
+  # These commands are from the tigervnc-common package which is optional.
+  foreach my $cmd ("tigervncpasswd") {
+    foreach my $dir ($binbase, split(/:/,$ENV{PATH})) {
+      my $fqcmd = File::Spec->catfile($dir, $cmd);
+      if (-x $fqcmd) {
+        $CMDS{$cmd} = $fqcmd;
+	next cmd;
+      }
+    }
+  }
   #
   # Check the HOME environment variable is set
   #
@@ -351,14 +371,14 @@ sub checkDisplayNumberAvailable {
   return 0 if &checkDisplayNumberUsed($n);
 
   if (-e "/tmp/.X$n-lock") {
-    print "\nWarning: $HOST:$n is taken because of /tmp/.X$n-lock\n";
-    print "Remove this file if there is no X server $HOST:$n\n";
+    print "\nWarning: $HOSTFQDN:$n is taken because of /tmp/.X$n-lock\n";
+    print "Remove this file if there is no X server $HOSTFQDN:$n\n";
     return 0;
   }
 
   if (-e "/tmp/.X11-unix/X$n") {
-    print "\nWarning: $HOST:$n is taken because of /tmp/.X11-unix/X$n\n";
-    print "Remove this file if there is no X server $HOST:$n\n";
+    print "\nWarning: $HOSTFQDN:$n is taken because of /tmp/.X11-unix/X$n\n";
+    print "Remove this file if there is no X server $HOSTFQDN:$n\n";
     return 0;
   }
   return 1;
@@ -375,20 +395,20 @@ sub getDisplayNumber {
     return $n if &checkDisplayNumberAvailable($n);
   }
   
-  print STDERR "$PROG: no free display number on $HOST.\n";
+  print STDERR "$PROG: no free display number on $HOSTFQDN.\n";
   exit -1;
 }
 
 sub pidFile {
   my ($options,$usedDisplay) = @_;
   $usedDisplay = $options->{'displayNumber'} unless defined $usedDisplay;
-  return "$options->{'vncUserDir'}/$HOST:$usedDisplay.pid";
+  return "$options->{'vncUserDir'}/$HOSTFQDN:$usedDisplay.pid";
 }
 
 sub desktopLog {
   my ($options,$usedDisplay) = @_;
   $usedDisplay = $options->{'displayNumber'} unless defined $usedDisplay;
-  return File::Spec->catfile($options->{'vncUserDir'}, "$HOST:$usedDisplay.log");
+  return File::Spec->catfile($options->{'vncUserDir'}, "$HOSTFQDN:$usedDisplay.log");
 }
 
 sub cleanStale {
@@ -407,7 +427,7 @@ sub cleanStale {
   }
   if (!$stale || !&checkDisplayNumberUsed($usedDisplay)) {
     foreach my $entry (grep { -e $_ } @x11Locks) {
-      unless ($options->{'dry-run'} || unlink($pidFile) || $! == &ENOENT) {
+      unless ($options->{'dry-run'} || unlink($entry) || $! == &ENOENT) {
         print STDERR "$PROG: Can't clean stale x11 lock '$entry': $!\n";
       } else {
         print "Cleaning stale x11 lock '$entry'!\n";
@@ -423,7 +443,7 @@ sub runningUserVncservers {
   my $d = DirHandle->new($options->{'vncUserDir'});
   if (defined $d) {
     while (defined(my $entry = $d->read)) {
-      next unless $entry =~ m/^\Q$HOST\E:(\d+)\.pid$/;
+      next unless $entry =~ m/^\Q$HOSTFQDN\E:(\d+)\.pid$/;
       my $usedDisplay = $1;
       my $pidFile     = File::Spec->catfile($options->{'vncUserDir'}, $entry);
       my $pidFileFh   = IO::File->new($pidFile, "r");
@@ -435,17 +455,22 @@ sub runningUserVncservers {
         print STDERR "$PROG: Can't parse pid file '$pidFile'!\n";
         next;
       }
-      my $pid = int($1);
-      if ($options->{'cleanstale'} && !kill(0, $pid)) {
+      my $pid   = int($1);
+      my $stale = !kill(0, $pid);
+      if ($options->{'cleanstale'} && $stale) {
         cleanStale($options, $usedDisplay, 1);
         next;
       }
+      my $DISPLAY = -e "/tmp/.X11-unix/X${usedDisplay}"
+        ? ":${usedDisplay}"
+	: "$HOSTFQDN:${usedDisplay}";
       # running vnc if !$options->{'cleanstale'}
       $runningUserVncservers{$usedDisplay} = {
-          'name'        => "$HOST:$usedDisplay",
+          'name'        => "$HOSTFQDN:$usedDisplay",
           'pid'         => $pid,
-          'host'        => $HOST,
-          'usedDisplay' => $usedDisplay
+          'DISPLAY'     => $DISPLAY,
+          'usedDisplay' => $usedDisplay,
+          'stale'       => $stale,
         };
     }
     undef $d;
@@ -517,7 +542,11 @@ sub listXvncServer {
     "\n".
     "X DISPLAY #\tPROCESS ID\n";
   foreach my $vnc (@{$vncs}) {
-    print $fh ":".$vnc."\t\t".$runningUserVncservers->{$vnc}->{'pid'}."\n";
+    next unless defined $runningUserVncservers->{$vnc};
+    my $stale = "";
+    $stale = " (stale)" if $runningUserVncservers->{$vnc}->{'stale'};
+    my $pid = $runningUserVncservers->{$vnc}->{'pid'};
+    print $fh ":".$vnc."\t\t".$pid.$stale."\n";
   }
 }
 
@@ -538,8 +567,8 @@ sub CreateMITCookie {
   } else {
     chomp $cookie;
   }
-  system($CMDS{"xauth"}, "-f", "$xauthorityFile", "add", "$HOST:$displayNumber", ".", "$cookie");
-  system($CMDS{"xauth"}, "-f", "$xauthorityFile", "add", "$HOST/unix:$displayNumber", ".", "$cookie"); 
+  system(getCommand("xauth"), "-f", "$xauthorityFile", "add", "$HOSTFQDN:$displayNumber", ".", "$cookie");
+  system(getCommand("xauth"), "-f", "$xauthorityFile", "add", "$HOST/unix:$displayNumber", ".", "$cookie"); 
 }
 
 # Make sure the user has a password.
@@ -554,7 +583,7 @@ sub CreateVNCPasswd {
       print STDERR "Can't remove old vnc passwd file '$vncPasswdFile': $!!\n";
       exit 1;
     }
-    system($CMDS{"tigervncpasswd"}, $vncPasswdFile); 
+    system(getCommand("tigervncpasswd"), $vncPasswdFile); 
     exit 1 if (($? >> 8) != 0);
   }
 }
@@ -583,7 +612,8 @@ sub startXvncServer {
       print $sf $options->{'defaultVncStartup'};
       $sf->close;
     }
-  } elsif (!(-x $vncStartup)) {
+  }
+  if (!(-x $vncStartup)) {
     unless ($options->{'dry-run'} || chmod 0755, $vncStartup) {
       print STDERR "$PROG: Can't fixup permissions of startup script '$vncStartup': $!\n";
       exit 1;
@@ -599,7 +629,7 @@ sub startXvncServer {
   my $xvncServerPid = fork();
   if ($xvncServerPid == 0) {
     # I am the child
-    my @cmd = ($CMDS{"Xtigervnc"});
+    my @cmd = (getCommand("Xtigervnc"));
     push @cmd, ":".$options->{'displayNumber'};
     if (defined $options->{'desktopName'}) {
       push @cmd, '-desktop', $options->{'desktopName'};
@@ -645,9 +675,8 @@ sub startXvncServer {
   
   my $runningUserVncservers = {
       $options->{'displayNumber'} => {
-          'name'        => "$HOST:".$options->{'displayNumber'},
+          'name'        => "$HOSTFQDN:".$options->{'displayNumber'},
           'pid'         => $xvncServerPid,
-          'host'        => $HOST,
           'usedDisplay' => $options->{'displayNumber'}
         }
     };
@@ -666,7 +695,7 @@ sub startXvncServer {
       usleep 100000;
     }
     if ($i < 0) {
-      print STDERR "$PROG: $CMDS{'Xtigervnc'} did not start up, please look into '$desktopLog' to determine the reason! $i\n";
+      print STDERR "$PROG: ".getCommand("Xtigervnc")." did not start up, please look into '$desktopLog' to determine the reason! $i\n";
       if (kill(0, $xvncServerPid)) {
         &killXvncServer($options, $runningUserVncservers, [$options->{'displayNumber'}]);
       } else {
@@ -680,10 +709,10 @@ sub startXvncServer {
   if (-e "/tmp/.X11-unix/X$options->{'displayNumber'}" ) {
     $ENV{DISPLAY}= ":$options->{'displayNumber'}";
   } else {
-    $ENV{DISPLAY}= "$HOST:$options->{'displayNumber'}";
+    $ENV{DISPLAY}= "$HOSTFQDN:$options->{'displayNumber'}";
   }
   $ENV{VNCDESKTOP} = $options->{'desktopName'};
-  print "\nNew '$options->{'desktopName'}' desktop at $HOST:$options->{'displayNumber'}\n\n";
+  print "\nNew '$options->{'desktopName'}' desktop at $ENV{DISPLAY} on machine $HOSTFQDN\n\n";
   
   # Run the X startup script.
   print "Starting applications specified in $vncStartup\n";
@@ -702,7 +731,7 @@ sub startXvncServer {
     STDERR->autoflush(1);
     STDOUT->autoflush(1);
     if ($options->{'fg'} || $options->{'autokill'}) {
-      system $cmd[0] (@cmd);
+      system {$cmd[0]} (@cmd);
       if (kill(0, $xvncServerPid)) {
         &killXvncServer($options, $runningUserVncservers, [$options->{'displayNumber'}]);
       } else {
@@ -776,8 +805,11 @@ sub main {
   &sanityCheck();
   
   # Get the hostname
-  chop($HOST = `$CMDS{"uname"} -n`);
-  
+  {
+    my $hostname= getCommand("hostname");
+    chomp($HOST     = `$hostname`);
+    chomp($HOSTFQDN = `$hostname -f`);
+  }
   #
   # Global options.  You may want to configure some of these for your site.
   # Use /etc/vnc.conf and ~/.vnc/vnc.conf for this purpose.
@@ -801,13 +833,19 @@ sub main {
       xauthorityFile		=>
         $ENV{XAUTHORITY} ||
         File::Spec->catfile($ENV{HOME}, ".Xauthority"),
-      defaultVncStartup         =>
-        "#! /bin/sh\n\n".
-        "vncconfig -iconic &\n".
-        "\$SHELL -l <<EOF\n".
-        "exec /etc/X11/Xsession \$@\n".
-        "EOF\n".
-        "vncserver -kill \$DISPLAY\n",
+      defaultVncStartup         => <<SCRIPTEOF
+#! /bin/sh
+
+test x"\$SHELL" = x"" && SHELL=/bin/bash
+test x"\$1"     = x"" && set -- default
+
+vncconfig -iconic &
+\$SHELL -l <<EOF
+exec /etc/X11/Xsession "\$@"
+EOF
+vncserver -kill \$DISPLAY
+SCRIPTEOF
+,
       vncUserDir		=>
         File::Spec->catfile($ENV{HOME}, ".vnc"),
       vncPasswdFile		=>
@@ -930,7 +968,7 @@ sub main {
       shift(@ARGV);
       $options->{'localhost'} = 'yes' if $1 eq "localhost";
       if (($1 eq "") || ($1 eq "localhost")) {
-        $options->{'displayHost'} = $HOST;
+        $options->{'displayHost'} = $HOSTFQDN;
       } else {
         $options->{'displayHost'} = $1;
       }
@@ -942,11 +980,11 @@ sub main {
     } elsif ((@ARGV > 0) && ($ARGV[0] !~ /^-/)) {
       &usage(1);
     } else {
-      $options->{'displayHost'}   = $HOST;
+      $options->{'displayHost'}   = $HOSTFQDN;
     }
-
     
-    if ($options->{'displayHost'} ne $HOST ) {
+    if ($options->{'displayHost'} ne $HOST &&
+        $options->{'displayHost'} ne $HOSTFQDN) {
       my @cmd = ("ssh", "$options->{'displayHost'}", "tigervncserver");
       push @cmd, "-dry-run" if $options->{'dry-run'};
       if ( $opts{'kill'} ) {
@@ -997,7 +1035,7 @@ sub main {
       push @vncs, $options->{'displayNumber'};
     }
   } elsif ($options->{'kill'} || $options->{'useold'}) {
-    push @vncs, sort keys %{$runningUserVncservers};
+    push @vncs, sort grep { !$runningUserVncservers->{$_}->{'stale'} } keys %{$runningUserVncservers};
     if ($#vncs >= 1) {
       print STDERR "$PROG: This is ambiguous. Multiple vncservers are running for this user!\n";
       &listXvncServer(\*STDERR, $options, $runningUserVncservers, \@vncs);
@@ -1023,16 +1061,22 @@ sub main {
     $options->{'displayNumber'} = $vncs[0];
     
     &checkGeometryAndDepth($options);
-    
+    my $haveOld =
+      $runningUserVncservers->{$options->{'displayNumber'}} &&
+      !$runningUserVncservers->{$options->{'displayNumber'}}->{'stale'};
     if (!&checkDisplayNumberAvailable($options->{'displayNumber'}) &&
-        (!$runningUserVncservers->{$options->{'displayNumber'}} ||
-         !$options->{'useold'})) {
-      print STDERR "A VNC server is already running as :$options->{'displayNumber'}\n";
+        !($options->{'useold'} && $haveOld)) {
+      print STDERR "A VNC/X11 server is already running as :$options->{'displayNumber'} on machine $HOSTFQDN\n";
       exit 1;
     }
-    if ($runningUserVncservers->{$options->{'displayNumber'}}) {
-      print "\nUsing old '$options->{'desktopName'}' desktop at $HOST:$options->{'displayNumber'}\n\n";
+    if ($options->{'useold'} && $haveOld) {
+      my $DISPLAY = $runningUserVncservers->{$options->{'displayNumber'}}->{'DISPLAY'};
+      print "\nUsing old '$options->{'desktopName'}' desktop at $DISPLAY on machine $HOSTFQDN\n\n";
     } else {
+      if ($runningUserVncservers->{$options->{'displayNumber'}} &&
+          $runningUserVncservers->{$options->{'displayNumber'}}->{'stale'}) {
+        &cleanStale($options,$options->{'displayNumber'},1);
+      }
       &startXvncServer( $options );
     }
   }

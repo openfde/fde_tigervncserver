@@ -1,3 +1,25 @@
+tigervnc (1.7.0+dfsg-1) unstable; urgency=high
+
+  [ Joachim Falk ]
+  * Make include /usr/share/xserver-xorg/configure_flags.mk optional.
+    This change enables the creation of a source deb without having all the
+    build dependencies installed, i.e., dpkg-buildpackage -d -S.
+  * Fixed stale pidfile condition detection and cleanup in tigervncserver
+    wrapper script.
+  * Fixed syntax error in tigervncserver wrapper script. Closes: #849963.
+  * Fixed default startup script generation in tigervncserver wrapper script
+    if the user specifies a custom vncStartup, e.g.,
+    $vncStartup = "$ENV{HOME}/.vnc/Xvnc-session"; in ~/.vnc/vnc.conf
+
+  [ Liang Guo ]
+  * Generate 1.7.0+dfsg.orig
+  * Refresh d/copyright
+
+  [ Ola Lundqvist ]
+  * Updated the package descriptions.
+
+ -- Ola Lundqvist <opal@debian.org>  Mon, 02 Jan 2017 22:51:08 +0100
+
 tigervnc (1.7.0-2) unstable; urgency=high
 
   * Most of CVE-2014-8241 was already corrected but this update correct
@@ -14,6 +36,9 @@ tigervnc (1.7.0-1) unstable; urgency=high
    - Removed a few patches that are already applied upstream.
    - Did quilt refresh on a few more.
   * Correction to make it build against xorg source 1.19. Closes: #843543.
+  * Security correction for CVE-2014-8240 that corrects an integer overflow
+    flaw, leading to a heap-based buffer overflow in screen size handling.
+    Closes: #849479.
   * Security correction for CVE-2014-8240 that corrects an integer overflow
     flaw, leading to a heap-based buffer overflow in screen size handling.
     Closes: #849479.
