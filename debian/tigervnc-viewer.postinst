@@ -10,7 +10,7 @@ if [ "$1" = "configure" ]; then
     noxtiger=${notiger#x};
     # Following conventions introduced in xvnc4viewer, xtightvncviewer
     update-alternatives \
-      --install $bindir/$noxtiger           $noxtiger      $bindir/$tiger 71 \
+      --install $bindir/$noxtiger           $noxtiger      $bindir/$tiger 80 \
       --slave   $bindir/$notiger            $notiger       $bindir/$tiger \
       --slave   $mandir/man1/$noxtiger.1.gz $noxtiger.1.gz $mandir/man1/$tiger.1.gz \
       --slave   $mandir/man1/$notiger.1.gz  $notiger.1.gz  $mandir/man1/$tiger.1.gz

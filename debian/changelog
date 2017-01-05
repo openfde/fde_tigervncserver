@@ -1,3 +1,86 @@
+tigervnc (1.7.0+dfsg-2) unstable; urgency=high
+
+  [ Ola Lundqvist ]
+  * Increased the update-alternatives priority so that this package will
+    have precedence over tightvnc and vnc4 that we hope to soon replace.
+
+  [ Joachim Falk ]
+  * Fixed spurious next cmd; in tigervncserver wrapper script. Leads to bug if
+    tigervnc-common package is also installed. Closes: #849996 and
+    Closes: #850054.
+  * Fixed bug if killing a non-existing tigervncserver, i.e.,
+    tigervncserver -kill :17
+    Use of uninitialized value $pid in concatenation (.) or string at
+    /usr/bin/tigervncserver line 493.
+    Can't kill a non-numeric process ID at /usr/bin/tigervncserver line 495.
+    Killing Xtigervnc process ID ...
+  * Fixed bug in tigervncserver wrapper script. An option -localhost without
+    an argument is true, i.e., only listen on localhost for vnc connections,
+    not false!
+  * Fixed bug in tigervncserver wrapper script. Correctly propagate -localhost
+    option to remote host if tigervncserver should start the Xtigervnc server
+    on a remote host via ssh, e.g., as requested by the following command:
+      - tigervncserver -localhost no <some remote server>:nn.
+  * Fixed bug in tigervncserver wrapper script. Now allow -list and -kill
+    commands to be executed on a remote host, e.g., as requested by the
+    following commands:
+      - tigervncserver -kill <some remote server>[:nn] or
+      - tigervncserver -list <some remote server>.
+  * Feature: Be a little more helpful after a remote tigervncserver sessions
+    has been started. Give the user the xtigervncviewer command that can be
+    used to connect to the started remote session.
+  * Fixed support for security types Plain, TLSPlain, and X509Plain. We now
+    have support for the -SecurityTypes option in the tigervncserver wrapper
+    script. Moreover, we now ship a tigervnc PAM service file required for
+    password authentication via PAM in the tigervncserver-common package. The
+    presence of tigervncserver-common will also be checked by the
+    tigervncserver wrapper script if at least one of the three plain security
+    types is used.
+  * Feature: Better support for security types X509None, X509Vnc, and
+    X509Plain.  We now have support for the -X509Cert and -X509Key options in
+    the tigervncserver wrapper script. Moreover, if the user does not specify
+    a certificate and key when at least one of the three X509 security types
+    is used, then we will generate a self signed certificate for the tigervnc
+    server if it is not already present.
+  * Update the descriptions in /etc/vnc.conf to conform to the real behavior
+    and options of the tigervncserver wrapper script. Reordered default option
+    definitions in the tigervncserver wrapper script to conform to the order
+    the options are documented in the /etc/vnc.conf configuration file.
+  * Fixed bug in tigervncserver wrapper script. The option $getDefaultFrom is
+    documented in the /etc/vnc.conf configuration file, but was ignored in the
+    wrapper script.
+  * Some love for the -xdisplaydefaults and -wmDecoration options. Now only
+    apply -wmDecoration shrinkage if -xdisplaydefaults is used.  The geometry
+    specified in /etc/vnc.conf and ~/.vnc/vnc.conf is no longer influenced by
+    wmDecoration. This is now the same behavior as the geometry specified by
+    the commonalind via -g NNxMM. Morover, use reasonable defaults for
+    -wmDecoration for the desktops contained in debian stretch.
+  * Fixed bug in tigervncserver wrapper script. The option -useold should
+    start a tigervncserver if it is not already running and not complain that
+    there is none running. This already worked when a desired display number
+    was given, but did not work when no display number was specified.
+  * Updated tigervncserver man page.
+  * Feature: Implement the -xstartup and -noxstartup options in the
+    tigervncserver wrapper script. These options are from the vncserver
+    wrapper script shipped with TigerVNC. Let our startup script be compatible
+    with theirs. These options are already documented in the updated
+    tigervncserver man page.
+  * Security hardening: The user can easily expose a VNC server to the
+    internet without any authentication by specifying tigervncserver
+    -localhost no -SecurityTypes None|TLSNone|X509None.  Moreover, previously
+    we switched the default from -localhost yes to -localhost no when a TLS*
+    or X509* security type was given via -SecurityTypes. From now on, we will
+    give a stern warning and refuse to start the VNC server when a *None
+    security type is combined with -localhost no. To continue, the user has to
+    provide the option --I-KNOW-THIS-IS-INSECURE.  If a *None security type is
+    used with localhost access, the user will merely get a polite warning.
+  * Fixed bug in tigervncserver wrapper script when options are forwarded to a
+    remote tigervncserver script. In this case, the ssh call introduces one
+    level of shell execution. Thus, the options must be shell escaped.
+  * Updated vnc.conf man page.
+
+ -- Ola Lundqvist <opal@debian.org>  Thu, 05 Jan 2017 23:35:23 +0100
+
 tigervnc (1.7.0+dfsg-1) unstable; urgency=high
 
   [ Joachim Falk ]

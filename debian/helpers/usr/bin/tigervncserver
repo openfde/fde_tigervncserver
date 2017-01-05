@@ -3,7 +3,7 @@
 #
 # vncserver - wrapper script to start an X VNC server.
 #
-# Copyright (C) 2004-2016 Joachim Falk <joachim.falk@gmx.de>
+# Copyright (C) 2004-2017 Joachim Falk <joachim.falk@gmx.de>
 # Please report all errors to Joachim Falk and not to OL.
 #
 # This file is based on a vncserver script provided by:
@@ -80,7 +80,7 @@ use Time::HiRes qw(usleep);
 use Errno qw(:POSIX);
 use POSIX ":sys_wait_h";
 
-use vars qw($HOST $HOSTFQDN $PROG %CMDS);
+use vars qw($HOST $HOSTFQDN $USER $PROG %CMDS);
 
 #
 # Set global constants
@@ -89,11 +89,19 @@ use vars qw($HOST $HOSTFQDN $PROG %CMDS);
 # Get the program name
 $PROG = basename($0);
 
+sub installPackageError {
+  my ($package) = @_;
+  print STDERR "\tPlease install the $package package, i.e., sudo apt-get install $package.\n";
+  exit 1;
+}
+
 sub getCommand {
   my ($cmd) = @_;
   return $CMDS{$cmd} if defined $CMDS{$cmd};
   print STDERR "$PROG: Couldn't find \"$cmd\" on your PATH.\n";
-  print STDERR "\tPlease install the tigervnc-common package!\n";
+  &installPackageError("tigenvnc-common") if $cmd eq 'tigervncpasswd';
+  &installPackageError("openssl") if $cmd eq 'openssl';
+  &installPackageError("x11-utils") if $cmd eq 'xdpyinfo';
   exit 1;
 }
 
@@ -120,13 +128,12 @@ cmd:
     print STDERR "$PROG: Couldn't find \"$cmd\" on your PATH.\n";
     exit 1;
   }
-  # These commands are from the tigervnc-common package which is optional.
-  foreach my $cmd ("tigervncpasswd") {
+  # These commands are optional.
+  foreach my $cmd ("tigervncpasswd", "openssl", "xdpyinfo") {
     foreach my $dir ($binbase, split(/:/,$ENV{PATH})) {
       my $fqcmd = File::Spec->catfile($dir, $cmd);
       if (-x $fqcmd) {
         $CMDS{$cmd} = $fqcmd;
-	next cmd;
       }
     }
   }
@@ -229,8 +236,10 @@ sub checkGeometryAndDepth {
   }
   if ($options->{'geometry'} =~ /^(\d+)x(\d+)$/) {
     my ( $width, $height ) = ( $1, $2 );
-    $width  -= $wmDecorationWidth;
-    $height -= $wmDecorationHeight;
+    if ($options->{'usedXDisplayDefaultsGeometry'}) {
+      $width  -= $wmDecorationWidth;
+      $height -= $wmDecorationHeight;
+    }
     if (($width<1) || ($height<1)) {
       print STDERR "$PROG: geometry $options->{'geometry'} is invalid\n";
       exit 1;
@@ -277,9 +286,15 @@ sub getXDisplayDefaults {
   
   my (@lines, @matchlines, $defaultVisualId, $i);
   
-  return if (!defined($ENV{DISPLAY}));
-  
-  @lines = `xdpyinfo 2>/dev/null`;
+  return if !defined($ENV{DISPLAY}) &&
+            !defined($options->{'getDefaultFrom'});
+
+  my $xdpyinfo = &getCommand("xdpyinfo");
+  if (defined $ENV{DISPLAY}) {
+    @lines = `$xdpyinfo 2>/dev/null`;
+  } else {
+    @lines = `$xdpyinfo $options->{'getDefaultFrom'} 2>/dev/null`;
+  }
   
   return if ($? != 0);
   
@@ -287,6 +302,7 @@ sub getXDisplayDefaults {
   if (@matchlines) {
     my ($width, $height) = ($matchlines[0] =~ /(\d+)x(\d+) pixels/);
     $options->{'geometry'} = "${width}x${height}";
+    $options->{'usedXDisplayDefaultsGeometry'} = 1;
   }
   
   @matchlines = grep(/default visual id/, @lines);
@@ -399,10 +415,28 @@ sub getDisplayNumber {
   exit -1;
 }
 
+#
+# quotedString returns a string which yields the original string when parsed
+# by a shell.
+#
+
+sub quotedString {
+  my ($in) = @_;
+  $in =~ s/\'/\'\"\'\"\'/g;
+  return "'$in'";
+}
+
 sub pidFile {
   my ($options,$usedDisplay) = @_;
   $usedDisplay = $options->{'displayNumber'} unless defined $usedDisplay;
   return "$options->{'vncUserDir'}/$HOSTFQDN:$usedDisplay.pid";
+}
+
+sub x509CertFiles {
+  my ($options) = @_;
+  return (
+    "$options->{'vncUserDir'}/${HOSTFQDN}-SrvCert.pem",
+    "$options->{'vncUserDir'}/${HOSTFQDN}-SrvKey.pem");
 }
 
 sub desktopLog {
@@ -491,6 +525,7 @@ sub killXvncServer {
     my $stale = 0;
     my $pid   = $runningUserVncservers->{$vnc}->{'pid'};
     
+    next unless defined $pid;
     print "Killing Xtigervnc process ID $pid...";
     unless ($options->{'dry-run'}) {
       if (kill('TERM', $pid)) {
@@ -574,6 +609,11 @@ sub CreateMITCookie {
 # Make sure the user has a password.
 sub CreateVNCPasswd {
   my ( $options ) = @_;
+
+  # Check whether VNC authentication is enabled, and if so, prompt the user to
+  # create a VNC password if they don't already have one.
+  return if !$options->{'vncAuthEnabled'} ||
+             $options->{'passwordArgSpecified'};
   my $vncPasswdFile = $options->{'vncPasswdFile'};
   my $st = stat($vncPasswdFile);
   
@@ -588,20 +628,78 @@ sub CreateVNCPasswd {
   }
 }
 
+# Make sure the user has a x509 certificate.
+sub CreateX509Cert {
+  my ( $options ) = @_;
+  
+  # Check whether X509 encryption is enabled, and if so, create
+  # a self signed certificate if not already present or specified
+  # on the command line.
+  return if !$options->{'x509CertRequired'} ||
+            defined $options->{'X509Cert'} ||
+            defined $options->{'X509Key'};
+  ($options->{'X509Cert'}, $options->{'X509Key'}) = 
+    &x509CertFiles($options);
+  
+  my $st = stat($options->{'X509Key'});
+  if (!defined($st) || ($st->mode & 077) || !-f $options->{'X509Cert'}) {
+    print "\nYou will require a certificate to use X509None, X509Vnc, or X509Plain.\n";
+    print "I will generate a self signed certificate for you in $options->{'X509Cert'}.\n\n";
+    unless (unlink($options->{'X509Cert'}) || $! == &ENOENT) {
+      print STDERR "Can't remove old X509Cert file '$options->{'X509Cert'}': $!!\n";
+      exit 1;
+    }
+    unless (unlink($options->{'X509Key'}) || $! == &ENOENT) {
+      print STDERR "Can't remove old X509Key file '$options->{'X509Key'}': $!!\n";
+      exit 1;
+    }
+    my $toSSLFh;
+    my @CMD = split(/\s+/, $options->{'sslAutoGenCertCommand'});
+    $CMD[0] = &getCommand($CMD[0]);
+    push @CMD, "-config", "-" unless grep { $_ eq "-config" } @CMD;
+    push @CMD, "-out", $options->{'X509Cert'} unless grep { $_ eq "-out" } @CMD;
+    push @CMD, "-keyout", $options->{'X509Key'} unless grep { $_ eq "-keyout" } @CMD;
+    unless (defined open($toSSLFh, "|-", @CMD)) {
+      print STDERR "Can't start openssl pipe: $!!\n";
+      exit 1;
+    }
+    my $configSSLFh;
+    unless (defined open($configSSLFh, "<", "/etc/tigervnc/ssleay.cnf")) {
+      print STDERR "Can't open openssl configuration template /etc/tigervnc/ssleay.cnf: $!\n";
+      exit 1;
+    }
+    while (my $line = <$configSSLFh>) {
+      $line =~ s/\@HostName\@/$HOSTFQDN/;
+      print $toSSLFh $line;
+    }
+    close $configSSLFh;
+    close $toSSLFh;
+    if ($? != 0) {
+      unlink $options->{'X509Cert'};
+      unlink $options->{'X509Key'};
+      print STDERR "The openssl command ", join(' ', @CMD), " failed: $?\n";
+      exit 1;
+    }
+  }
+}
+
 # Now start the X VNC Server
 sub startXvncServer {
   my ($options) = @_;
   my $vncStartup = $options->{'vncStartup'};
+  my $xstartupArg= $options->{'xstartupArgSpecified'};
   my $vncPort    = 5900 + $options->{'displayNumber'};
   my $desktopLog = &desktopLog($options);
   my $pidFile    = &pidFile($options);
   
-  # Make sure the user has a password.
+  # Make sure the user has a password if required.
   &CreateVNCPasswd($options);
+  # Make sure the user has a x509 certificate if required.
+  &CreateX509Cert($options);
   &CreateMITCookie($options);
   
   # Create the user's vncStartup script if necessary.
-  if (!(-e $vncStartup)) {
+  if (defined($vncStartup) && !$xstartupArg && !(-e $vncStartup)) {
     print "Creating default startup script $vncStartup\n";
     unless ($options->{'dry-run'}) {
       my $sf = IO::File->new($vncStartup, "w", 0755);
@@ -613,7 +711,7 @@ sub startXvncServer {
       $sf->close;
     }
   }
-  if (!(-x $vncStartup)) {
+  if (defined($vncStartup) && !$xstartupArg && !(-x $vncStartup)) {
     unless ($options->{'dry-run'} || chmod 0755, $vncStartup) {
       print STDERR "$PROG: Can't fixup permissions of startup script '$vncStartup': $!\n";
       exit 1;
@@ -649,11 +747,20 @@ sub startXvncServer {
     push @cmd, '-depth', $options->{'depth'} if $options->{'depth'};
     push @cmd, '-pixelformat', $options->{'pixelformat'} if $options->{'pixelformat'};
     push @cmd, '-rfbwait', $options->{'rfbwait'};
-    push @cmd, '-rfbauth', $options->{'vncPasswdFile'};
+    push @cmd, '-rfbauth', $options->{'vncPasswdFile'} if $options->{'vncAuthEnabled'};
     push @cmd, '-rfbport', $vncPort;
     push @cmd, '-pn';
     push @cmd, '-localhost' if $options->{'localhost'} =~ m/^(?:yes|true|1)$/i;
     push @cmd, '-fp', $options->{'fontPath'} if $options->{'fontPath'};
+    push @cmd, "-SecurityTypes", $options->{'SecurityTypes'} if defined $options->{'SecurityTypes'};
+    if ($options->{'plainAuthEnabled'}) {
+      push @cmd, "-PAMService", $options->{'PAMService'} if defined $options->{'PAMService'};
+      push @cmd, "-PlainUsers", $options->{'PlainUsers'} if defined $options->{'PlainUsers'};
+    }
+    if ($options->{'x509CertRequired'}) {
+      push @cmd, "-X509Cert", $options->{'X509Cert'} if defined $options->{'X509Cert'};
+      push @cmd, "-X509Key", $options->{'X509Key'} if defined $options->{'X509Key'};
+    }
     push @cmd, @ARGV;
 
     print join(" ",@cmd), "\n" if $options->{'verbose'};
@@ -685,13 +792,13 @@ sub startXvncServer {
     my $i = 10;
     for (; $i >= 0; $i = $i-1) {
       last if &checkTCPPortUsed(5900 + $options->{'displayNumber'});
-      if ($xvncServerPid = waitpid($xvncServerPid, WNOHANG)) { $i = -2; last; }
+      if ($xvncServerPid == waitpid($xvncServerPid, WNOHANG)) { $i = -2; last; }
       usleep 100000;
     }
     for (; $i >= 0; $i = $i-1) {
       last if -e "/tmp/.X11-unix/X$options->{'displayNumber'}" ||
               &checkTCPPortUsed(6000 + $options->{'displayNumber'});
-      if ($xvncServerPid = waitpid($xvncServerPid, WNOHANG)) { $i = -2; last; }
+      if ($xvncServerPid == waitpid($xvncServerPid, WNOHANG)) { $i = -2; last; }
       usleep 100000;
     }
     if ($i < 0) {
@@ -713,41 +820,106 @@ sub startXvncServer {
   }
   $ENV{VNCDESKTOP} = $options->{'desktopName'};
   print "\nNew '$options->{'desktopName'}' desktop at $ENV{DISPLAY} on machine $HOSTFQDN\n\n";
-  
-  # Run the X startup script.
-  print "Starting applications specified in $vncStartup\n";
-  print "Log file is $desktopLog\n\n";
-  
-  my $childPid = $options->{'fg'} ? 0 : fork();
+
+  if (defined $vncStartup) {
+    # Run the X startup script.
+    print "Starting applications specified in $vncStartup\n";
+    print "Log file is $desktopLog\n\n";
+  } elsif ($options->{'fg'} || $options->{'autokill'}) {
+    # Nothing to start and I should also kill the Xtigervnc server when the
+    # Xvnc-session terminates. Well, lets do so. What a pointless exercise.
+    &killXvncServer($options, $runningUserVncservers, [$options->{'displayNumber'}]);
+  }
+
+  if (kill(0, $xvncServerPid)) {
+    my @cmd = ("xtigervncviewer");
+    push @cmd, "-SecurityTypes", $options->{'SecurityTypes'};
+    push @cmd, "-X509CA", $options->{'X509Cert'} if $options->{'x509CertRequired'};
+    push @cmd, "-passwd", $options->{'vncPasswdFile'} if $options->{'vncAuthEnabled'};
+    if ($options->{'localhost'} =~ m/^(?:yes|true|1)$/i) {
+      push @cmd, ":$options->{'displayNumber'}";
+    } else {
+      push @cmd, "$HOSTFQDN:$options->{'displayNumber'}";
+    }
+    print "Use ".join(" ", @cmd)." to connect to the VNC server.\n\n";
+  }
+
+  pipe RH, WH or die "Can't open pipe: $!";
+  my $childPid = defined $vncStartup
+    ? ($options->{'fg'} ? 0 : fork())
+    : $$;
+
   if ($childPid == 0) {
     # I am the child
     my @cmd = ($vncStartup);
     push @cmd, @{$options->{'sessionArgs'}};
     print join(" ",@cmd), "\n" if $options->{'verbose'};
 
+    open(OLDOUT, '>&', \*STDOUT); # save old STDOUT
     open(OLDERR, '>&', \*STDERR); # save old STDERR
     open(STDOUT, '>>', $desktopLog);
     open(STDERR, '>>', $desktopLog);
     STDERR->autoflush(1);
     STDOUT->autoflush(1);
+    OLDERR->autoflush(1);
+    OLDOUT->autoflush(1);
+
+    $SIG{'ALRM'} = sub {
+        open(OLDERR, '>', '/dev/null') unless $options->{'fg'};
+        open(OLDOUT, '>', '/dev/null') unless $options->{'fg'};
+        syswrite WH, "OK"; close WH;
+        $SIG{'ALRM'} = 'DEFAULT';
+      };
+    # Wait for three seconds for erros to appear and to propagate to
+    # our parent if not in -fg mode.
+    alarm 3 unless $options->{'fg'};
+    $! = 0;
+    if (system {$cmd[0]} (@cmd)) {
+      if ($!) {
+        alarm 0; # this must not be before the if ($!) condition
+        print OLDERR "\n$PROG: Can't start ",
+          join(" ", map { &quotedString($_); } @cmd), ": $!!\n";
+      } else {
+        alarm 0; # this must not be before the if ($!) condition
+        print OLDERR "\n$PROG: Failed command ",
+          join(" ", map { &quotedString($_); } @cmd), ": $?!\n";
+      }
+      $SIG{'ALRM'} = 'DEFAULT';
+      syswrite WH, "ERR"; close WH;
+    } else {
+      &{$SIG{'ALRM'}} if ref($SIG{'ALRM'}) eq 'CODE';
+    }
     if ($options->{'fg'} || $options->{'autokill'}) {
-      system {$cmd[0]} (@cmd);
       if (kill(0, $xvncServerPid)) {
         &killXvncServer($options, $runningUserVncservers, [$options->{'displayNumber'}]);
       } else {
         &cleanStale($options,$options->{'displayNumber'},0);
       }
-      exit 0;
-    } else {
-      exec {$cmd[0]} (@cmd) or
-        print OLDERR "$PROG: Can't exec '".$cmd[0]."': $!\n";
-      exit 1;
     }
+    exit 0 unless $options->{'fg'};
+    open(STDOUT, '>&', \*OLDOUT); # restore STDOUT
+    open(STDERR, '>&', \*OLDERR); # restore STDERR
   } elsif ($childPid < 0) {
     # Failed to fork
     print STDERR "$PROG: failed to fork: $!\n";
+    exit -1;
   }
-  # I am the parent
+  if (defined $vncStartup) {
+    # I am the parent
+    close WH;
+    my $status;
+    $status = 'ERR' unless defined sysread RH, $status, 3;
+    unless ($status eq 'OK') {
+      my $header = "=================== tail -15 $desktopLog ===================";
+      print STDERR "\n${header}\n";
+      system 'tail -15 '.&quotedString($desktopLog).' 1>&2';
+      print STDERR "\n".("=" x length $header)."\n\n";
+      print STDERR "Starting applications specified in $vncStartup has failed.\n";
+      print STDERR "Maybe try something simple first, e.g.,\n";
+      print STDERR "\ttigervncserver -xstartup /usr/bin/xterm\n";
+      exit -1;
+    }
+  }
   exit 0;
 }
 
@@ -773,15 +945,33 @@ sub usage {
     $prefix." |bgr888|bgr565|bgr233]  red color channel encoded in lower bits\n".
     $prefix."[-geometry <dim>]      Desktop geometry in <width>x<height>\n".
     $prefix."[-xdisplaydefaults]    Get geometry and pixelformat from running X\n".
-    $prefix."[-wmDecoration <dim>]  Shrink geometry by dim\n".
+    $prefix."[-wmDecoration <dim>]  Shrink geometry from xdisplaydefaults by dim\n".
     $prefix."[-localhost yes|no]    Only accept VNC connections from localhost\n".
     $prefix."[-httpPort     port]   Port of internal http server\n".
     $prefix."[-baseHttpPort port]   Calculate http port from base port + display nr\n".
     $prefix."[-fg]                  No daemonization and\n".
     $prefix."                       kill the VNC server after its X session has terminated\n".
     $prefix."[-autokill]            Kill the VNC server after its X session has terminated\n".
+    $prefix."[-noxstartup]          Do not run the Xvnc-session script after launching Xtigervnc\n".
+    $prefix."[-xstartup]            Specify the script to start after launching Xtigervnc\n".
     $prefix."[-fp fontpath]         Colon separated list of font locations\n".
     $prefix."[-cleanstale]          Do not choke on a stale lockfile\n".
+    $prefix."[-SecurityTypes]       Comma list of security types to offer (None, VncAuth,\n".
+    $prefix."                       Plain, TLSNone, TLSVnc, TLSPlain, X509None, X509Vnc,\n".
+    $prefix."                       X509Plain). On default, offer only VncAuth.\n".
+    $prefix."[-PlainUsers]          In case of security types Plain, TLSPlain, and X509Plain,\n".
+    $prefix."                       this options specifies the list of authorized users.\n".
+    $prefix."[-PAMService]          In case of security types Plain, TLSPlain, and X509Plain,\n".
+    $prefix."                       this options specifies the service name for PAM password\n".
+    $prefix."                       validation (default vnc if present otherwise tigervnc).\n".
+    $prefix."[-PasswordFile]        Password file for security types VncAuth, TLSVnc, and X509Vnc.\n".
+    $prefix."                       The default password file is ~/.vnc/passwd\n".
+    $prefix."[-passwd]              Alias for PasswordFile\n".
+    $prefix."[-rfbauth]             Alias for PasswordFile\n".
+    $prefix."[-X509Key]             Path to the key of the X509 certificate in PEM format. This\n".
+    $prefix."                       is used by the security types X509None, X509Vnc, and X509Plain.\n".
+    $prefix."[-X509Cert]            Path to the X509 certificate in PEM format. This is used by\n".
+    $prefix."                       the security types X509None, X509Vnc, and X509Plain.\n".
     $prefix."<X11-options ...>      Further options for Xtigervnc(1)\n".
     $prefix."[-- sessiontype]       Arguments for the VNC startup script Xvnc-session\n\n".
 
@@ -810,29 +1000,57 @@ sub main {
     chomp($HOST     = `$hostname`);
     chomp($HOSTFQDN = `$hostname -f`);
   }
+  # Get the username
+  chomp($USER = `/usr/bin/id -u -n`);
+
   #
   # Global options.  You may want to configure some of these for your site.
   # Use /etc/vnc.conf and ~/.vnc/vnc.conf for this purpose.
   #
   my $options = {
-      # a guess at typical size for window manager decoration
-      wmDecoration		=> "4x24",
-      geometry			=> "1280x1024",
-      depth			=> 32,
-      pixelformat		=> undef,
-      desktopName		=> "X-".($ENV{LOGNAME}||"unknown"),
-      rfbwait			=> 30000,
-      cleanstale		=> 0,
-      clean			=> 0,
-      displayNumber		=> undef,
-      displayHost		=> undef,
-      localhost			=> 1,
+# Values that are documented in /etc/vnc.conf
+## Values declared as system values in /etc/vnc.conf
+      vncClasses		=>
+        undef, # /var/www/vnc if the directory exists (checked later)
+      baseHttpPort		=> undef,
+      XFConfigPath		=> "/etc/X11/xorg.conf",
       fontPath			=> undef,
-      XFConfigPath		=>
-        "/etc/X11/xorg.conf",
+      PAMService		=>
+        undef, # Use vnc if /etc/pam.d/vnc exists. Otherwise,
+	       # use our own /etc/pam.d/tigervnc as fallback.
+      sslAutoGenCertCommand	=>
+      	"openssl req -newkey ec:/etc/tigervnc/ecparams.pem -x509 -days 2190 -nodes",
+## Values declared as user values in /etc/vnc.conf, i.e., values
+## that are intended to be overwritten by ~/.vnc/vnc.conf.
+      vncUserDir		=>
+        File::Spec->catfile($ENV{HOME}, ".vnc"),
+      vncPasswdFile		=>
+        undef, # later derived from vncUserDir
+      vncStartup		=>
+        undef, # later derived from vncUserDir
       xauthorityFile		=>
         $ENV{XAUTHORITY} ||
         File::Spec->catfile($ENV{HOME}, ".Xauthority"),
+      desktopName		=> undef,
+      wmDecoration		=>
+      	"8x64", # a guess at the typical size for a window manager decoration
+      geometry			=> "1280x1024",
+      depth			=> 32,
+      pixelformat		=> undef,
+      getDefaultFrom		=> undef,
+      rfbwait			=> 30000,
+      localhost			=> undef,
+      SecurityTypes		=>
+        undef, # later derived depening on localhost setting
+      PlainUsers		=>
+        undef, # later derived from /usr/bin/id -u -n
+      X509Cert			=>
+      	undef, # auto generated if absent and stored in
+	       # ~/.vnc/${HOSTFQDN}-SrvCert.pem
+      X509Key			=>
+      	undef, # auto generated if absent and stored in
+	       # ~/.vnc/${HOSTFQDN}-SrvKey.pem
+# Undocumented values
       defaultVncStartup         => <<SCRIPTEOF
 #! /bin/sh
 
@@ -846,13 +1064,12 @@ EOF
 vncserver -kill \$DISPLAY
 SCRIPTEOF
 ,
-      vncUserDir		=>
-        File::Spec->catfile($ENV{HOME}, ".vnc"),
-      vncPasswdFile		=>
-        undef, # later derived from vncUserDir
-      vncStartup		=>
-        undef, # later derived from vncUserDir
       sessionArgs		=> [],
+      cleanstale		=> 0,
+      clean			=> 0,
+      httpPort			=> undef,
+      displayNumber		=> undef,
+      displayHost		=> undef,
     };
   
   #
@@ -877,17 +1094,26 @@ SCRIPTEOF
       exit 1;
     }
   }
+  my $vncStartup = $options->{'vncStartup'};
+  undef $options->{'vncStartup'};
   &readConfigFile($options, File::Spec->catfile($options->{'vncUserDir'}, "vnc.conf"));
   unless (defined $options->{'vncStartup'}) {
+    # vncStartup was not defined by the user configuration in ~/.vnc/vnc.conf.
     if (-f File::Spec->catfile($options->{'vncUserDir'}, "Xvnc-session")) {
+      # A user provided Xvnc-session script exists => user it.
       $options->{'vncStartup'} =
         File::Spec->catfile($options->{'vncUserDir'}, "Xvnc-session");
-    } elsif (-f File::Spec->catfile($options->{'vncUserDir'}, "Xvnc-session")) {
+    } elsif (-f File::Spec->catfile($options->{'vncUserDir'}, "xstartup")) {
+      # A user provided Xvnc-session script exists => user it.
       $options->{'vncStartup'} =
         File::Spec->catfile($options->{'vncUserDir'}, "xstartup");
-    } else {
+    } elsif (!defined $vncStartup) {
+      # vncStartup was not defined by the system configuration in /etc/vnc.conf.
       $options->{'vncStartup'} =
         File::Spec->catfile($options->{'vncUserDir'}, "Xvnc-session");
+    } else {
+      # Use the system configuration for vncStartup.
+      $options->{'vncStartup'} = $vncStartup;
     }
   }
   unless (defined $options->{'vncPasswdFile'}) {
@@ -925,6 +1151,7 @@ SCRIPTEOF
         fg        => 0,
         autokill  => 0,
         useold    => 0,
+        noxstartup=> 0,
       );
     my $p = new Getopt::Long::Parser;
     $p->configure("pass_through");
@@ -945,6 +1172,17 @@ SCRIPTEOF
       'list'              => \$opts{'list'},
       'fg'                => \$opts{'fg'},
       'autokill'          => \$opts{'autokill'},
+      'noxstartup'        => \$opts{'noxstartup'},
+      'xstartup:s'        => sub {
+          $opts{'noxstartup'} = 0;
+          if ($_[1] eq '') {
+            $opts{'vncStartup'} = undef;
+            $opts{'xstartupArgSpecified'} = undef;
+          } else {
+            $opts{'vncStartup'} = $_[1];
+            $opts{'xstartupArgSpecified'} = 1;
+          }
+        },
       'xdisplaydefaults'  => sub {
         &getXDisplayDefaults($options); },
       'wmDecoration=s'    => \$options->{'wmDecoration'},
@@ -954,17 +1192,32 @@ SCRIPTEOF
       'baseHttpPort=i'    => sub {
         $options->{'baseHttpPort'} = $_[1];
         undef $options->{'httpPort'}; },
-      'localhost:s'       => \$options->{'localhost'},
+      'localhost:s'       =>  sub {
+          if ($_[1] eq '') {
+            $options->{'localhost'} = 1;
+          } else {
+            $options->{'localhost'} = $_[1];
+          }
+        },
       'useold'            => \$opts{'useold'},
       'cleanstale'        => \$options->{'cleanstale'},
       'clean'             => \$options->{'clean'},
       'verbose'           => \$options->{'verbose'},
       'dry-run'           => \$options->{'dry-run'},
+      'SecurityTypes=s'	  => \$options->{'SecurityTypes'},
+      'PAMService=s'	  => \$opts{'PAMService'},
+      'PlainUsers=s'	  => \$opts{'PlainUsers'},
+      'passwd=s'	  => \$opts{'vncPasswdFile'},
+      'rfbauth=s'	  => \$opts{'vncPasswdFile'},
+      'PasswordFile=s'	  => \$opts{'vncPasswdFile'},
+      'X509Key=s'	  => \$opts{'X509Key'},
+      'X509Cert=s'	  => \$opts{'X509Cert'},
+      'I-KNOW-THIS-IS-INSECURE' => \$options->{'I-KNOW-THIS-IS-INSECURE'},
     );
     
     &usage(!$rc) if (!$rc || $opts{'help'});
     
-    if ((@ARGV > 0) && ($ARGV[0] =~ /^([\w\d.]*):(\d+(?:\.\d+)?|\*)$/)) {
+    if ((@ARGV > 0) && ($ARGV[0] =~ /^([@\w\d.]*)(?::(\d+(?:\.\d+)?|\*))?$/)) {
       shift(@ARGV);
       $options->{'localhost'} = 'yes' if $1 eq "localhost";
       if (($1 eq "") || ($1 eq "localhost")) {
@@ -972,10 +1225,12 @@ SCRIPTEOF
       } else {
         $options->{'displayHost'} = $1;
       }
-      $options->{'displayNumber'} = $2;
-      $options->{'displayNumber'} =~ s{\.\d+$}{};
+      if (defined $2) {
+        $options->{'displayNumber'} = $2;
+        $options->{'displayNumber'} =~ s{\.\d+$}{};
+      }
       if (!$opts{'kill'} && !$opts{'list'}) {
-        &usage(1) if $options->{'displayNumber'} eq '*';
+        &usage(1) if ($options->{'displayNumber'}||"") eq '*';
       }
     } elsif ((@ARGV > 0) && ($ARGV[0] !~ /^-/)) {
       &usage(1);
@@ -985,44 +1240,144 @@ SCRIPTEOF
     
     if ($options->{'displayHost'} ne $HOST &&
         $options->{'displayHost'} ne $HOSTFQDN) {
-      my @cmd = ("ssh", "$options->{'displayHost'}", "tigervncserver");
+      my @cmdPrefix = ("ssh", "$options->{'displayHost'}", "tigervncserver");
+      # Get rid of possible user@ in front of displayHost.
+      $options->{'displayHost'} =~ s/^[\w\d.]*@//;
+      my @cmd;
       push @cmd, "-dry-run" if $options->{'dry-run'};
       if ( $opts{'kill'} ) {
         push @cmd, "-kill";
-        push @cmd, ":$options->{'displayNumber'}";
+        push @cmd, ":$options->{'displayNumber'}" if defined $options->{'displayNumber'};
         push @cmd, "-clean" if ($options->{'clean'});
       } elsif ( $opts{'list'} ) {
         push @cmd, "-list";
+        push @cmd, ":$options->{'displayNumber'}" if defined $options->{'displayNumber'};
+        push @cmd, "-cleanstale" if ($options->{'cleanstale'});
       } else {
-        push @cmd, ":$options->{'displayNumber'}";
+        push @cmd, ":$options->{'displayNumber'}" if defined $options->{'displayNumber'};
         push @cmd, "-geometry", $options->{'geometry'} if ($options->{'geometry'});
         push @cmd, "-pixelformat", $options->{'pixelformat'} if ($options->{'pixelformat'});
         push @cmd, "-depth", $options->{'depth'} if ($options->{'depth'});
-        push @cmd, "-name", $options->{'desktopName'} if ($options->{'desktopName'});
+        push @cmd, "-name", $options->{'desktopName'} if defined $options->{'desktopName'};
         push @cmd, "-fp", $opts{'fp'} if $opts{'fp'};
         push @cmd, "-fg" if $opts{'fg'};
+        push @cmd, "-noxstartup" if $opts{'noxstartup'};
+        push @cmd, "-xstartup", $opts{'vncStartup'} if !$opts{'noxstartup'} && defined $opts{'vncStartup'};
         push @cmd, "-autokill" if $opts{'autokill'};
         push @cmd, "-httpPort", $options->{'httpPort'} if ($options->{'httpPort'});
         push @cmd, "-baseHttpPort", $options->{'baseHttpPort'} if ($options->{'baseHttpPort'});
-        push @cmd, "-localhost" if ($options->{'localhost'});
+        push @cmd, "-localhost", $options->{'localhost'} if defined $options->{'localhost'};
         push @cmd, "-useold" if $opts{'useold'};
         push @cmd, "-cleanstale" if ($options->{'cleanstale'});
         push @cmd, "-wmDecoration", $options->{'wmDecoration'} if ($options->{'wmDecoration'});
+        push @cmd, "-SecurityTypes", $options->{'SecurityTypes'} if defined $options->{'SecurityTypes'};
+        push @cmd, "-PAMService", $opts{'PAMService'} if defined $opts{'PAMService'};
+        push @cmd, "-PlainUsers", $opts{'PlainUsers'} if defined $opts{'PlainUsers'};
+        push @cmd, "-PasswordFile", $opts{'vncPasswdFile'} if defined $opts{'vncPasswdFile'};
+        push @cmd, "-X509Key", $opts{'X509Key'} if defined $opts{'X509Key'};
+        push @cmd, "-X509Cert", $opts{'X509Cert'} if defined $opts{'X509Cert'};
         push @cmd, @ARGV;
         if ($#{$options->{'sessionArgs'}} >= 0) {
           push @cmd, '--';
           push @cmd, @{$options->{'sessionArgs'}};
         }
       }
+      @cmd = (@cmdPrefix, map { &quotedString($_); } @cmd);
       print join(" ",@cmd), "\n" if $options->{'verbose'};
-      exec(@cmd);
-      # print "\"".join(" ",@cmd)."\"\n";
-      # die "\nCan't tell if $options->{'displayHost'} equals $HOST\n";
-      exit -1;
+      if (system (@cmd)) {
+        print STDERR "\n$PROG: Command '", join(" ", @cmd), "' failed: $?\n";
+        exit -1;
+      }
+      if (!$opts{'kill'} && !$opts{'list'}) {
+        # Feedback on how to connect to the remote tigervnc server.
+        if (defined $options->{'displayNumber'}) {
+          print "Use xtigervncviewer -via $options->{'displayHost'} :$options->{'displayNumber'} to connect!\n";
+        } else {
+          print "Use xtigervncviewer -via $options->{'displayHost'} :n to connect!\n";
+          print "The display number :n is given in the above startup message from tigervncserver.\n";
+        }
+      }
+      exit 0;
     }
     
+    unless (defined $options->{'PlainUsers'}) {
+      chomp($options->{'PlainUsers'} = `/usr/bin/id -u -n`);
+    }
+    unless (defined $options->{'PAMService'}) {
+      if (-f '/etc/pam.d/vnc') {
+        $options->{'PAMService'} = 'vnc';
+      } else {
+        # Default vnc service not present. Hence, we fall back to our own tigervnc service.
+        $options->{'PAMService'} = 'tigervnc';
+      }
+    }
+
     foreach my $key (keys %opts) {
-      $options->{$key} = $opts{$key};
+      $options->{$key} = $opts{$key} if defined $opts{$key};
+    }
+    if ($opts{'noxstartup'}) {
+      $options->{'vncStartup'} = undef;
+      $options->{'xstartupArgSpecified'} = undef;
+    }
+    if (defined $opts{'vncPasswdFile'}) {
+      $options->{'passwordArgSpecified'} = 1;
+    } else {
+      $options->{'passwordArgSpecified'} = 0;
+    }
+    if (defined $options->{'localhost'}) {
+      $options->{'localhost'} = $options->{'localhost'} =~ m/^(?:yes|true|1)$/i;
+    }
+    unless (defined $options->{'SecurityTypes'}) {
+      if (!defined($options->{'localhost'}) || $options->{'localhost'}) {
+        $options->{'SecurityTypes'} = 'VncAuth';
+        $options->{'localhost'}     = 1;
+      } else {
+        $options->{'SecurityTypes'} = 'VncAuth,TLSVnc';
+        $options->{'localhost'}     = 0;
+      }
+    }
+    $options->{'vncAuthEnabled'} = 0;
+    $options->{'noneAuthEnabled'} = 0;
+    $options->{'plainAuthEnabled'} = 0;
+    $options->{'x509CertRequired'} = 0;
+    $options->{'haveSSLEncryption'} = 0;
+    foreach my $securityType (split(',', $options->{'SecurityTypes'})) {
+      $options->{'vncAuthEnabled'} = 1    if $securityType =~ m/^(?:.*vnc|vncauth)$/i;
+      $options->{'noneAuthEnabled'} = 1   if $securityType =~ m/none$/i;
+      $options->{'plainAuthEnabled'} = 1  if $securityType =~ m/plain$/i;
+      $options->{'x509CertRequired'} = 1  if $securityType =~ m/^x509/i;
+      $options->{'haveSSLEncryption'} = 1 if $securityType =~ m/^(?:x509|tls)/i;
+    }
+
+    if ($options->{'plainAuthEnabled'} &&
+        $options->{'PAMService'} eq 'tigervnc' &&
+        ! -f '/etc/pam.d/tigervnc') {
+      print STDERR "$PROG: The tigervnc PAM servcice required for the security types\n";
+      print STDERR "\tPlain, TLSPlain, or X509Plain is not installed.\n";
+      &installPackageError("tigervnc-common");
+    }
+
+    unless (defined $options->{'localhost'}) {
+      # If we have no encrypted VNC connection security types or
+      # we have at least one *None security type in there, then
+      # we better only server VNC on localhost to be tunneled via
+      # ssh.
+      $options->{'localhost'} = !$options->{'haveSSLEncryption'}
+                             || $options->{'noneAuthEnabled'};
+    }
+    # PREVENT THE USER FROM EXPOSING A VNC SESSION WITHOUT AUTHENTICATION
+    # TO THE WHOLE INTERNET!!!
+    if (!$options->{'localhost'} && $options->{'noneAuthEnabled'} &&
+        !$options->{'I-KNOW-THIS-IS-INSECURE'}) {
+      print STDERR "$PROG: YOU ARE TRYING TO EXPOSE A VNC SERVER WITHOUT ANY\n";
+      print STDERR "AUTHENTICATION TO THE WHOLE INTERNET! I AM REFUSING TO COOPERATE!\n\n";
+      print STDERR "If you really want to do that add the --I-KNOW-THIS-IS-INSECURE option!\n";
+      exit -1;
+    }
+    if ($options->{'noneAuthEnabled'} &&
+        !$options->{'I-KNOW-THIS-IS-INSECURE'}) {
+      print STDERR "Please be aware that you are exposing your VNC server to all users on the\n";
+      print STDERR "local machine. These users can access your server without authentication!\n";
     }
   }
   
@@ -1040,9 +1395,12 @@ SCRIPTEOF
       print STDERR "$PROG: This is ambiguous. Multiple vncservers are running for this user!\n";
       &listXvncServer(\*STDERR, $options, $runningUserVncservers, \@vncs);
       exit 1;
-    } elsif ($#vncs == -1) {
+    } elsif ($#vncs == -1 && $options->{'kill'}) {
       print STDERR "$PROG: No vncserver running for this user!\n";
       exit 1;
+    } elsif ($#vncs == -1 && $options->{'useold'}) {
+      # Find display number.
+      push @vncs, &getDisplayNumber();
     }
   } elsif ($options->{'list'}) {
     push @vncs, sort keys %{$runningUserVncservers};
@@ -1068,6 +1426,9 @@ SCRIPTEOF
         !($options->{'useold'} && $haveOld)) {
       print STDERR "A VNC/X11 server is already running as :$options->{'displayNumber'} on machine $HOSTFQDN\n";
       exit 1;
+    }
+    unless (defined $options->{'desktopName'}) {
+      $options->{'desktopName'} = "${HOSTFQDN}:$options->{'displayNumber'} ($USER)";
     }
     if ($options->{'useold'} && $haveOld) {
       my $DISPLAY = $runningUserVncservers->{$options->{'displayNumber'}}->{'DISPLAY'};
