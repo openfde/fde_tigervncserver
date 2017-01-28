@@ -74,10 +74,10 @@ The real http port will be derived from this base plus the display number.
 .TP
 .IR $XFConfigPath\ \| =\ " /etc/X11/xorg.conf """;
 Can be set to the global
-.I xorg.conf 
+.I xorg.conf
 file. This will be
 parsed to gain default values for
-.I $fontPath .
+.IR $fontPath .
 .\"and
 .\".IR $colorPath .
 If you want to disable this feature, point it to an
@@ -110,8 +110,15 @@ Note that the tigervnc-common package provides the PAM service configuration fil
 Otherwise, if
 .I /etc/pam.d/vnc
 is present, then the\fB vnc\fP PAM service will be used.
-.TP
-.IR $sslAutoGenCertCommand\ \| =\ " openssl\ req\ \-newkey\ ec:/etc/tigervnc/ecparams.pem\ \-x509\ \-days\ 2190\ \-nodes """;
+.PP
+.IR $sslAutoGenCertCommand\ \| =\ " openssl\ req
+.RS 15
+.I \-newkey\ ec:/etc/tigervnc/ecparams.pem
+.RE
+.RS 15
+.IR \-x509\ \-days\ 2190\ \-nodes """;
+.RE
+.RS
 The command specified by the\fI $sslAutoGenCertCommand\fP parameter is used to auto generate the certificate for the\fI \-X509Cert\fP and\fI \-X509Key\fP options of
 .BR Xtigervnc (1) .
 The configuration for
@@ -119,6 +126,7 @@ The configuration for
 is taken from
 .I /etc/tigervnc/ssleay.cnf
 where we substitute\fB @HostName@\fP by the fully qualified domain name of the host.
+.RE
 .TP
 .IR $vncUserDir\ \| =\ " $ENV{HOME}/.vnc """;
 Contains the filename for the log files directory of Xvnc
@@ -163,7 +171,7 @@ It must be either 32, 24, 16, or 8.
 .TP
 .IR $pixelformat\ \| =\ " rgb888 """;
 Specifies the pixel format for the
-.BR Xtigervnc (1) 
+.BR Xtigervnc (1)
 server to use (BGRnnn or RGBnnn). The default for depth 8 is BGR233 (meaning the
 most significant two bits represent blue, the next three green, and the least
 significant three represent red), the default for depth 16 is RGB565 and for
@@ -198,10 +206,10 @@ or via the \fI$SecurityTypes\fP configuration parameter in
 or in
 .IR $HOME/.vnc/vnc.conf ,
 then the default depends on the specified security types.
-The default will be 
+The default will be
 .IR $localhost\ \| =\ " no """
 if the specified security types contain at least one of the \fB TLS*\fP or\fB X509*\fP secutity types and also contain none of the \fP *None\fP security types.
-As always, the defaults can be overwritten on the commandline via the \fI\-localhost\fP option or via the \fI$localhost\fP configuration paramater in 
+As always, the defaults can be overwritten on the commandline via the \fI\-localhost\fP option or via the \fI$localhost\fP configuration parameter in
 .I /etc/vnc.conf
 or in
 .IR $HOME/.vnc/vnc.conf .
@@ -221,7 +229,7 @@ Thus, in the case of
 .IR $localhost\ \| =\ " no """, the default for\fI $SecurityTypes\fP will be extended from  \fBVncAuth\fP to \fBVncAuth\fP,\fBTLSVnc\fP.
 .TP
 .IR $PlainUsers\ \| =\ " $ENV{LOGNAME} """
-The \fI$PlainUsers\fP configuration parameter contains a a comma seperated list of users
+The \fI$PlainUsers\fP configuration parameter contains a comma separated list of users
 that are authorized to access the VNC server if the security types\fB Plain\fP,\fB TLSPlain\fP,
 or\fB X509Plain\fP are used to establish the connection. The password for these users are
 check by the system via the PAM service specified via \fI$PAMService\fP option. On default,
@@ -244,7 +252,7 @@ If filenames are given for \fI$X509Cert\fP and \fI$X509Key\fP either here or
 on the commandline via \fI\-X509Cert\fP and \fI\-X509Key\fP options, then
 the auto generation is disabled and the user has to take care
 that usable certificates are present.
-.ES
+.RE
 .SH FILES
 .TP
 .B /usr/bin/vncserver

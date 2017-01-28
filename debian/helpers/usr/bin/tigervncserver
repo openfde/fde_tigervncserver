@@ -1371,7 +1371,7 @@ SCRIPTEOF
         !$options->{'I-KNOW-THIS-IS-INSECURE'}) {
       print STDERR "$PROG: YOU ARE TRYING TO EXPOSE A VNC SERVER WITHOUT ANY\n";
       print STDERR "AUTHENTICATION TO THE WHOLE INTERNET! I AM REFUSING TO COOPERATE!\n\n";
-      print STDERR "If you really want to do that add the --I-KNOW-THIS-IS-INSECURE option!\n";
+      print STDERR "If you really want to do that, add the --I-KNOW-THIS-IS-INSECURE option!\n";
       exit -1;
     }
     if ($options->{'noneAuthEnabled'} &&
