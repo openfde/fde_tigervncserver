@@ -1,3 +1,10 @@
+tigervnc (1.7.0+dfsg-4) unstable; urgency=medium
+
+  * Make sure libtool do not complain about missing symbol.
+    Closes: #851842.
+
+ -- Ola Lundqvist <opal@debian.org>  Mon, 30 Jan 2017 13:04:13 +0000
+
 tigervnc (1.7.0+dfsg-3) unstable; urgency=high
 
   [ Salvatore Bonaccorso ]

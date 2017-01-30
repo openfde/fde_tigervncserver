@@ -16,6 +16,7 @@ DEB_SRCDIR   = .
 # However in this case we do not have this file from upstream so we use a
 # debian specific copy instead.
 VNC_PATCH = $(CURDIR)/debian/xserver119.patch
+VNC_LIBTOOL_PATCH = $(CURDIR)/contrib/packages/deb/ubuntu-xenial/debian/xorg-source-patches/debian_libtool.patch
 
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
@@ -97,7 +98,7 @@ apply-patches-vnc-patch-xorg: apply-patches-unify-xorg-and-vnc-tree
 apply-patches-unify-xorg-and-vnc-tree:
 
 reverse-patches-dance: reverse-patches-remove-xorg-from-vnc-tree
-reverse-patches-remove-xorg-from-vnc-tree: reverse-patches-vnc-unpatch-xorg
+reverse-patches-remove-xorg-from-vnc-tree: reverse-patches-vnc-unpatch-xorg reverse-patches-vnc-unpatch-xorg-libtool
 reverse-patches-vnc-unpatch-xorg: reverse-patches-deautoreconf
 reverse-patches-deautoreconf: reverse-patches
 
@@ -133,6 +134,22 @@ reverse-patches-vnc-unpatch-xorg: $(VNC_PATCH)
 	cd $(DEB_SRCDIR)/unix/xserver && if test -f .apply-patches-vnc-patch-xorg.stamp; then \
 		patch --no-backup-if-mismatch -R -p1 < $(VNC_PATCH); \
 		rm -f .apply-patches-vnc-patch-xorg.stamp; \
+	fi
+
+.PHONY: apply-patches-vnc-patch-xorg-libtool reverse-patches-vnc-unpatch-xorg-libtool
+
+apply-patches-vnc-patch-xorg-libtool: $(DEB_SRCDIR)/unix/xserver/.apply-patches-vnc-patch-xorg-libtool.stamp
+
+$(DEB_SRCDIR)/unix/xserver/.apply-patches-vnc-patch-xorg-libtool.stamp: $(VNC_LIBTOOL_PATCH)
+	cd $(DEB_SRCDIR)/unix/xserver && { \
+		patch --no-backup-if-mismatch -p1 < $(VNC_LIBTOOL_PATCH) && \
+		touch .apply-patches-vnc-patch-xorg-libtool.stamp; \
+	}
+
+reverse-patches-vnc-unpatch-xorg-libtool: $(VNC_LIBTOOL_PATCH)
+	cd $(DEB_SRCDIR)/unix/xserver && if test -f .apply-patches-vnc-patch-xorg-libtool.stamp; then \
+		patch --no-backup-if-mismatch -R -p1 < $(VNC_LIBTOOL_PATCH); \
+		rm -f .apply-patches-vnc-patch-xorg-libtool.stamp; \
 	fi
 
 .PHONY: apply-patches-unify-xorg-and-vnc-tree reverse-patches-remove-xorg-from-vnc-tree
@@ -190,7 +207,7 @@ XORG_DEBIAN_CONFIGURE_FLAGS = \
 # Next step is run configure script. It is very difficult use correct parameters.
 # You should use same parameters as used in your distribution X server and add
 # --disable-xvfb --disable-xnest --disable-xorg
-$(DEB_BUILDDIR)/unix/xserver/configure.stamp:
+$(DEB_BUILDDIR)/unix/xserver/configure.stamp: apply-patches-vnc-patch-xorg-libtool
 	mkdir -p $(DEB_BUILDDIR)/unix/xserver
 	cd $(DEB_BUILDDIR)/unix/xserver && \
 	  $(DEB_CONFIGURE_SCRIPT_ENV) $(CURDIR)/$(DEB_SRCDIR)/unix/xserver/configure \
