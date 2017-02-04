@@ -1,3 +1,14 @@
+tigervnc (1.7.0+dfsg-5) unstable; urgency=medium
+
+  [ Ola Lundqvist ]
+  Just added bug closing information for the default depth change.
+
+  [ Joachim Falk ]
+  * Changed default -depth from 32 to 24 to heed warning in man Xtigervnc.
+    Closes: #854096.
+
+ -- Ola Lundqvist <opal@debian.org>  Sat, 04 Feb 2017 01:55:24 +0100
+
 tigervnc (1.7.0+dfsg-4) unstable; urgency=medium
 
   * Make sure libtool do not complain about missing symbol.

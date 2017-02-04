@@ -1035,7 +1035,7 @@ sub main {
       wmDecoration		=>
       	"8x64", # a guess at the typical size for a window manager decoration
       geometry			=> "1280x1024",
-      depth			=> 32,
+      depth			=> 24,
       pixelformat		=> undef,
       getDefaultFrom		=> undef,
       rfbwait			=> 30000,
