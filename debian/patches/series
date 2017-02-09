@@ -42,6 +42,10 @@ f/tigervnc-cursor.patch
 # fix-build-error-with-xserver-1.18.patch # applied upstream
 fix-build-error-with-xserver-1.19.patch
 v2-Add-xorg-xserver-1.19-support-to-tigervnc.patch
+fix-xorg1.19-inetd-mode.patch
+fix-xorg1.19-server-side-cursor.patch
+
+# The following patches are security fixes
 CVE-2014-8240-849479.patch
 CVE-2014-8241-849478.patch
 Fix-buffer-overflow-in-ModifiablePixelBuffer-fillRec.patch

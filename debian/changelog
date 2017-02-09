@@ -1,3 +1,14 @@
+tigervnc (1.7.0+dfsg-6) unstable; urgency=high
+
+  [ Joachim Falk ]
+  * Fix server side cursor support for Xorg server >= 1.19. Closes: #852639
+  * Applied upstream patch [PATCH] Fix -inetd not working with xserver >=
+    1.19. Closes: #852633.
+  * Fixed documentation of default value for -depth option in tigervncserver
+    man page.
+
+ -- Ola Lundqvist <opal@debian.org>  Thu, 09 Feb 2017 23:51:56 +0100
+
 tigervnc (1.7.0+dfsg-5) unstable; urgency=medium
 
   [ Ola Lundqvist ]
