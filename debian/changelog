@@ -1,3 +1,29 @@
+tigervnc (1.7.0+dfsg-7) unstable; urgency=high
+
+  [ Joachim Falk ]
+  * Fixed the following security vulnerabilities (Closes: #859259):
+  - Fix SSecurityVeNCrypt.cxx; SSecurityVeNCrypt::SSecurityVeNCrypt.
+    An unauthenticated client can cause a small memory leak in the server.
+    (CVE-2017-7392)
+  - Fix VNCSConnectionST.cxx VNCSConnectionST::fence. An authenticated client
+    can cause a double free, leading to denial of service or potentially code
+    execution. (CVE-2017-7393)
+  - Fix SSecurityPlain.cxx SSecurityPlain::processMsg. An unauthenticated
+    users can crash the server by sending long usernames. (CVE-2017-7394)
+  - Fix SMsgReader.cxx SMsgReader::readClientCutText. An authenticated client
+    can crash the server by causing an integer overflow. (CVE-2017-7395)
+  - Fix CConnection.cxx CConnection::CConnection. An unauthenticated client
+    can cause a small memory leak in the server. (CVE-2017-7396)
+  * The tigervncserver wrapper script gives up and kills the server it
+    just started if it doesn't have its VNC-TCP and X11-unix sockets up and
+    running within a second. However, if a machine is a bit bogged down,
+    this can prevent starting the server at all, for no good reason.
+    Thus, the timeout has been increased to 30 seconds. (Closes: #859141)
+  * Refreshed dependencies for Xtigervnc server build from xorg-server-1.19.2
+    used in stretch. (Closes: #858048)
+
+ -- Yaroslav Halchenko <debian@onerussian.com>  Sun, 09 Apr 2017 10:38:13 -0400
+
 tigervnc (1.7.0+dfsg-6) unstable; urgency=high
 
   [ Joachim Falk ]
