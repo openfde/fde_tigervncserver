@@ -1,3 +1,14 @@
+tigervnc (1.7.0+dfsg-8) unstable; urgency=high
+
+  [ Joachim Falk ]
+  * Applied patch from Chris Lamb to enable reproducible builds
+    for TigerVNC (Closes: #865753).
+
+  [ Ola Lundqvist ]
+  * Build fix to move lib to usr/lib. A bit tricky case. Closes: #880308.
+
+ -- Ola Lundqvist <opal@debian.org>  Mon, 04 Dec 2017 10:39:19 +0100
+
 tigervnc (1.7.0+dfsg-7) unstable; urgency=high
 
   [ Joachim Falk ]
