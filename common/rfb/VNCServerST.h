@@ -1,4 +1,5 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
+ * Copyright 2009-2016 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,23 +26,20 @@
 
 #include <sys/time.h>
 
-#include <list>
-
 #include <rfb/SDesktop.h>
 #include <rfb/VNCServer.h>
-#include <rfb/Configuration.h>
 #include <rfb/LogWriter.h>
 #include <rfb/Blacklist.h>
 #include <rfb/Cursor.h>
 #include <rfb/Timer.h>
 #include <network/Socket.h>
-#include <rfb/ListConnInfo.h>
 #include <rfb/ScreenSet.h>
 
 namespace rfb {
 
   class VNCSConnectionST;
   class ComparingUpdateTracker;
+  class ListConnInfo;
   class PixelBuffer;
   class KeyRemapper;
 
@@ -66,6 +64,10 @@ namespace rfb {
     // removeSocket
     //   Clean up any resources associated with the Socket
     virtual void removeSocket(network::Socket* sock);
+
+    // getSockets() gets a list of sockets.  This can be used to generate an
+    // fd_set for calling select().
+    virtual void getSockets(std::list<network::Socket*>* sockets);
 
     // processSocketReadEvent
     //   Read more RFB data from the Socket.  If an error occurs during
@@ -96,8 +98,9 @@ namespace rfb {
     virtual void add_changed(const Region &region);
     virtual void add_copied(const Region &dest, const Point &delta);
     virtual void setCursor(int width, int height, const Point& hotspot,
-                           const void* cursorData, const void* mask);
+                           const rdr::U8* data);
     virtual void setCursorPos(const Point& p);
+    virtual void setLEDState(unsigned state);
 
     virtual void bell();
 
@@ -111,19 +114,10 @@ namespace rfb {
     // any), and logs the specified reason for closure.
     void closeClients(const char* reason, network::Socket* sock);
 
-    // getSockets() gets a list of sockets.  This can be used to generate an
-    // fd_set for calling select().
-
-    void getSockets(std::list<network::Socket*>* sockets);
-
     // getSConnection() gets the SConnection for a particular Socket.  If
     // the Socket is not recognised then null is returned.
 
     SConnection* getSConnection(network::Socket* sock);
-
-    // getDesktopSize() returns the size of the SDesktop exported by this
-    // server.
-    Point getDesktopSize() const {return desktop->getFbSize();}
 
     // getName() returns the name of this VNC Server.  NB: The value returned
     // is the server's internal buffer which may change after any other methods
@@ -201,6 +195,7 @@ namespace rfb {
     // - Internal methods
 
     void startDesktop();
+    void stopDesktop();
 
     static LogWriter connectionsLog;
     Blacklist blacklist;
@@ -211,6 +206,7 @@ namespace rfb {
     int blockCounter;
     PixelBuffer* pb;
     ScreenSet screenLayout;
+    unsigned int ledState;
 
     CharArray name;
 
@@ -221,7 +217,7 @@ namespace rfb {
     ComparingUpdateTracker* comparer;
 
     Point cursorPos;
-    Cursor cursor;
+    Cursor* cursor;
     RenderedCursor renderedCursor;
     bool renderedCursorInvalid;
 
@@ -229,10 +225,12 @@ namespace rfb {
     int authClientCount();
 
     bool needRenderedCursor();
-    void startDefer();
-    bool checkDefer();
-    void tryUpdate();
-    bool checkUpdate();
+    void startFrameClock();
+    void stopFrameClock();
+    int msToNextUpdate();
+    void writeUpdate();
+    Region getPendingRegion();
+    const RenderedCursor* getRenderedCursor();
 
     void notifyScreenLayoutChange(VNCSConnectionST *requester);
 
@@ -247,9 +245,7 @@ namespace rfb {
 
     bool disableclients;
 
-    Timer deferTimer;
-    bool deferPending;
-    struct timeval deferStart;
+    Timer frameTimer;
   };
 
 };

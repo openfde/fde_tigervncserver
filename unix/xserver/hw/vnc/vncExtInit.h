@@ -37,11 +37,9 @@ extern "C" {
 // vncExt.c
 extern int vncNoClipboard;
 
-int vncAddExtension(void);
+void vncAddExtension(void);
 
 int vncNotifyQueryConnect(void);
-
-void vncClientCutText(const char* str, int len);
 
 // vncExtInit.cc
 extern void* vncFbptr[];
@@ -50,14 +48,15 @@ extern int vncFbstride[];
 extern int vncInetdSock;
 
 void vncExtensionInit(void);
-int vncExtensionIsActive(int scrIdx);
+void vncExtensionClose(void);
 
-void vncCallReadBlockHandlers(fd_set * fds, struct timeval ** timeout);
-void vncCallReadWakeupHandlers(fd_set * fds, int nfds);
-void vncCallWriteBlockHandlers(fd_set * fds, struct timeval ** timeout);
-void vncCallWriteWakeupHandlers(fd_set * fds, int nfds);
+void vncHandleSocketEvent(int fd, int scrIdx, int read, int write);
+void vncCallBlockHandlers(int* timeout);
 
 int vncGetAvoidShiftNumLock(void);
+
+int vncGetSetPrimary(void);
+int vncGetSendPrimary(void);
 
 void vncUpdateDesktopName(void);
 
@@ -71,6 +70,8 @@ void vncApproveConnection(uint32_t opaqueId, int approve);
 
 void vncBell(void);
 
+void vncSetLEDState(unsigned long leds);
+
 // Must match rfb::ShortRect in common/rfb/Region.h, and BoxRec in the
 // Xorg source.
 struct UpdateRect {
@@ -83,7 +84,7 @@ void vncAddCopied(int scrIdx, const struct UpdateRect *extents,
                   int nRects, const struct UpdateRect *rects,
                   int dx, int dy);
 
-void vncSetCursor(int scrIdx, int width, int height, int hotX, int hotY,
+void vncSetCursor(int width, int height, int hotX, int hotY,
                   const unsigned char *rgbaData);
 
 void vncPreScreenResize(int scrIdx);

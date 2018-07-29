@@ -38,6 +38,8 @@ namespace rfb {
       { return validUser(username) ? validateInternal(sc, username, password) : false; }
     static StringParameter plainUsers;
 
+    virtual ~PasswordValidator() { }
+
   protected:
     virtual bool validateInternal(SConnection* sc, const char *username, const char *password)=0;
     static bool validUser(const char* username);
@@ -50,10 +52,15 @@ namespace rfb {
     virtual int getType() const { return secTypePlain; };
     virtual const char* getUserName() const { return username.buf; }
 
+    virtual ~SSecurityPlain() { }
+
   private:
     PasswordValidator* valid;
     unsigned int ulen, plen, state;
     CharArray username;
+
+    static const unsigned int MaxSaneUsernameLength = 1024;
+    static const unsigned int MaxSanePasswordLength = 1024;
   };
 
 }

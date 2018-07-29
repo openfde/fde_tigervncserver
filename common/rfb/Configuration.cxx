@@ -1,5 +1,6 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
  * Copyright 2004-2005 Cendio AB.
+ * Copyright 2017 Peter Astrand <astrand@cendio.se> for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,24 +24,14 @@
 #include <ctype.h>
 #include <string.h>
 
+#include <os/Mutex.h>
+
 #include <rfb/util.h>
 #include <rfb/Configuration.h>
 #include <rfb/LogWriter.h>
 #include <rfb/Exception.h>
-#include <rfb/Threading.h>
 
-#ifdef __RFB_THREADING_IMPL
-// On platforms that support Threading, we use Locks to make getData safe
-#define LOCK_CONFIG Lock l(*configLock())
-rfb::Mutex* configLock_ = 0;
-static rfb::Mutex* configLock() {
-  if (!configLock_)
-    configLock_ = new rfb::Mutex;
-  return configLock_;
-}
-#else
-#define LOCK_CONFIG
-#endif
+#define LOCK_CONFIG os::AutoMutex a(mutex)
 
 #include <rdr/HexOutStream.h>
 #include <rdr/HexInStream.h>
@@ -176,6 +167,23 @@ void Configuration::list(int width, int nameWidth) {
 }
 
 
+bool Configuration::remove(const char* param) {
+  VoidParameter *current = head;
+  VoidParameter **prevnext = &head;
+
+  while (current) {
+    if (strcasecmp(current->getName(), param) == 0) {
+      *prevnext = current->_next;
+      return true;
+    }
+    prevnext = &current->_next;
+    current = current->_next;
+  }
+
+  return false;
+}
+
+
 // -=- VoidParameter
 
 VoidParameter::VoidParameter(const char* name_, const char* desc_,
@@ -195,9 +203,12 @@ VoidParameter::VoidParameter(const char* name_, const char* desc_,
 
   _next = conf->head;
   conf->head = this;
+
+  mutex = new os::Mutex();
 }
 
 VoidParameter::~VoidParameter() {
+  delete mutex;
 }
 
 const char*
@@ -327,7 +338,7 @@ bool
 IntParameter::setParam(const char* v) {
   if (immutable) return true;
   vlog.debug("set %s(Int) to %s", getName(), v);
-  int i = atoi(v);
+  int i = strtol(v, NULL, 0);
   if (i < minValue || i > maxValue)
     return false;
   value = i;

@@ -35,6 +35,8 @@ namespace rfb {
     // Give us the raw frame buffer, and not something converted to
     // the what the client is asking for.
     EncoderUseNativePF = 1 << 0,
+    // Encoder does not encode pixels perfectly accurate
+    EncoderLossy = 1 << 1,
   };
 
   class Encoder {
@@ -43,7 +45,7 @@ namespace rfb {
             enum EncoderFlags flags, unsigned int maxPaletteSize);
     virtual ~Encoder();
 
-    // isSupported() should return a boolean indiciating if this encoder
+    // isSupported() should return a boolean indicating if this encoder
     // is okay to use with the current connection. This usually involves
     // checking the list of encodings in the connection parameters.
     virtual bool isSupported()=0;
