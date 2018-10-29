@@ -1,3 +1,17 @@
+tigervnc (1.9.0+dfsg-2) unstable; urgency=medium
+
+  [ Christoph Biedl ]
+  * Add missing dependency on libunwind-dev. (Closes: #911712).
+
+  [ Joachim Falk ]
+  * Add missing .desktop file and icons for xtigervncviewer. (Closes: #905905).
+
+  [ Mike Gabriel ]
+  * debian/*: White-space clean up.
+  * debian/control: Comment out one occursion of dh-autoreconf. Thanks lintian.
+
+ -- Mike Gabriel <sunweaver@debian.org>  Mon, 29 Oct 2018 10:42:06 +0100
+
 tigervnc (1.9.0+dfsg-1) unstable; urgency=high
 
   [ Joachim Falk ]
@@ -471,13 +485,13 @@ tigervnc (1.1.0-2jf) UNRELEASED; urgency=low
   * Added RH patch tigervnc11-ldnow.patch disabling lazy symbol resolution for libvnc.so
 
   * Added RH patch tigervnc11-rh690245.patch which add TLS encryption to VeNCrypt
-    
+
       TigerVNC (Xvnc, x0vncserver, the libvnc.so module, and vncviewer) now
       supports TLS encryption (using VeNCrypt) which allows TLS encrypted
       communication between a server and a viewer. (BZ#653491)
 
   * Added RH patch tigervnc11-rh588342.patch which fixes EQ overflowing bug.
-    
+
       Xvnc could become unresponsive and the following error message was shown
       in the log: "[mi] EQ overflowing. The server is probably stuck in an
       infinite loop.". This was caused by a large number of user input events
@@ -486,7 +500,7 @@ tigervnc (1.1.0-2jf) UNRELEASED; urgency=low
       expected. (BZ#588342)
 
   * Add RH patch tigervnc11-rh628054-xorg.patch which fixes vmware keyboard interaction bug.
-    
+
       Prior to this update, Xvnc (the X VNC server; part of the tigervnc
       package) did not pass keyboard input to a remote VMware workstation
       because it did not take into account types of keyboards which do not
@@ -495,7 +509,7 @@ tigervnc (1.1.0-2jf) UNRELEASED; urgency=low
       workstations. (BZ#628054)
 
   * Add RH patch tigervnc11-rh645755.patch fix signal interrupted read
-    
+
       The Xvnc server randomly refused connections when the reading of the
       password file (provided when starting Xvnc with the "-PasswordFile"
       option) was interrupted by a signal. With this update, the loading of a
@@ -525,7 +539,7 @@ tigervnc (1.0.90-2jf) UNRELEASED; urgency=low
   * vncviewer => xvncviewer
 
  -- Joachim Falk <joachim.falk@gmx.de>  Sun, 31 Jul 2011 22:26:46 +0200
- 
+
 tigervnc (1.0.90-1jf) UNRELEASED; urgency=low
 
   * Initial dpk package
