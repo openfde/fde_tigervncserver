@@ -4,6 +4,10 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
 # Where the tigervnc sources are
 DEB_SRCDIR   = .
 # Don't override DEB_BUILDDIR as /usr/share/cdbs/1/class/cmake.mk does not
@@ -15,7 +19,6 @@ DEB_SRCDIR   = .
 #VNC_PATCH = $(CURDIR)/unix/xserver117.patch
 # However in this case we do not have this file from upstream so we use a
 # debian specific copy instead.
-#VNC_PATCH = $(CURDIR)/debian/xserver119-buster.patch
 #VNC_PATCH = $(CURDIR)/unix/xserver119.patch
 VNC_PATCH = $(CURDIR)/unix/xserver120.patch
 VNC_LIBTOOL_PATCH = $(CURDIR)/contrib/packages/deb/ubuntu-xenial/debian/xorg-source-patches/debian_libtool.patch
@@ -267,6 +270,9 @@ install/tigervnc-viewer::
 	  cp media/icons/tigervnc_$${i}.png \
 	    $(DEB_DESTDIR)/usr/share/icons/hicolor/$${i}x$${i}/apps/tigervnc.png; \
 	done
+	# Hack, replace media/icons/tigervnc_16.png of wrong dimensions 20x20 by our fixed version.
+	cp debian/tigervnc_16.png \
+	  $(DEB_DESTDIR)/usr/share/icons/hicolor/16x16/apps/tigervnc.png
 
 install/tigervnc-standalone-server install/tigervnc-xorg-extension::
 	$(MAKE) TIGERVNC_BUILDDIR="$(CURDIR)/$(DEB_BUILDDIR)" -C $(DEB_BUILDDIR)/unix/xserver/hw/vnc DESTDIR=$(DEB_DESTDIR) install
@@ -300,4 +306,3 @@ debian/tmp/common-binary-impl.stamp:
 clean::
 	rm -rf $(DEB_BUILDDIR)
 	rm -f debian/*.debhelper.log
-
