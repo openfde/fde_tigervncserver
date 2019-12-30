@@ -18,6 +18,7 @@
 
 #include <rdr/RandomStream.h>
 #include <rdr/Exception.h>
+#include <rfb/LogWriter.h>
 #include <time.h>
 #include <stdlib.h>
 #ifndef WIN32
@@ -30,9 +31,11 @@
 #endif
 #endif
 
+static rfb::LogWriter vlog("RandomStream");
+
 using namespace rdr;
 
-const int DEFAULT_BUF_LEN = 256;
+const size_t DEFAULT_BUF_LEN = 256;
 
 unsigned int RandomStream::seed;
 
@@ -46,11 +49,11 @@ RandomStream::RandomStream()
   if (!CryptAcquireContext(&provider, 0, 0, PROV_RSA_FULL, 0)) {
     if (GetLastError() == (DWORD)NTE_BAD_KEYSET) {
       if (!CryptAcquireContext(&provider, 0, 0, PROV_RSA_FULL, CRYPT_NEWKEYSET)) {
-        fprintf(stderr, "RandomStream: unable to create keyset\n");
+        vlog.error("unable to create keyset");
         provider = 0;
       }
     } else {
-      fprintf(stderr, "RandomStream: unable to acquire context\n");
+      vlog.error("unable to acquire context");
       provider = 0;
     }
   }
@@ -65,7 +68,7 @@ RandomStream::RandomStream()
   {
 #endif
 #endif
-    fprintf(stderr,"RandomStream: warning: no OS supplied random source - using rand()\n");
+    vlog.error("no OS supplied random source - using rand()");
     seed += (unsigned int) time(0) + getpid() + getpid() * 987654 + rand();
     srand(seed);
   }
@@ -83,11 +86,11 @@ RandomStream::~RandomStream() {
 #endif
 }
 
-int RandomStream::pos() {
+size_t RandomStream::pos() {
   return offset + ptr - start;
 }
 
-int RandomStream::overrun(int itemSize, int nItems, bool wait) {
+size_t RandomStream::overrun(size_t itemSize, size_t nItems, bool wait) {
   if (itemSize > DEFAULT_BUF_LEN)
     throw Exception("RandomStream overrun: max itemSize exceeded");
 
@@ -98,7 +101,7 @@ int RandomStream::overrun(int itemSize, int nItems, bool wait) {
   offset += ptr - start;
   ptr = start;
 
-  int length = start + DEFAULT_BUF_LEN - end;
+  size_t length = start + DEFAULT_BUF_LEN - end;
 
 #ifdef RFB_HAVE_WINCRYPT
   if (provider) {
@@ -109,7 +112,7 @@ int RandomStream::overrun(int itemSize, int nItems, bool wait) {
 #else
 #ifndef WIN32
   if (fp) {
-    int n = fread((U8*)end, length, 1, fp);
+    size_t n = fread((U8*)end, length, 1, fp);
     if (n != 1)
       throw rdr::SystemException("reading /dev/urandom or /dev/random failed",
                                  errno);
@@ -119,12 +122,14 @@ int RandomStream::overrun(int itemSize, int nItems, bool wait) {
   {
 #endif
 #endif
-    for (int i=0; i<length; i++)
+    for (size_t i=0; i<length; i++)
       *(U8*)end++ = (int) (256.0*rand()/(RAND_MAX+1.0));
   }
 
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
+  size_t nAvail;
+  nAvail = (end - ptr) / itemSize;
+  if (nAvail < nItems)
+    return nAvail;
 
   return nItems;
 }

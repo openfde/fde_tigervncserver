@@ -31,12 +31,26 @@ using namespace rdr;
 
 static LogWriter vlog("PixelBuffer");
 
+// We do a lot of byte offset calculations that assume the result fits
+// inside a signed 32 bit integer. Limit the maximum size of pixel
+// buffers so that these calculations never overflow.
+
+const int maxPixelBufferWidth = 16384;
+const int maxPixelBufferHeight = 16384;
+const int maxPixelBufferStride = 16384;
+
 
 // -=- Generic pixel buffer class
 
 PixelBuffer::PixelBuffer(const PixelFormat& pf, int w, int h)
-  : format(pf), width_(w), height_(h) {}
-PixelBuffer::PixelBuffer() : width_(0), height_(0) {}
+  : format(pf), width_(0), height_(0)
+{
+  setSize(w, h);
+}
+
+PixelBuffer::PixelBuffer() : width_(0), height_(0)
+{
+}
 
 PixelBuffer::~PixelBuffer() {}
 
@@ -53,7 +67,7 @@ PixelBuffer::getImage(void* imageBuf, const Rect& r, int outStride) const
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Source rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          r.width(), r.height(),
-                         r.tl.x, r.tl.y, width_, height_);
+                         r.tl.x, r.tl.y, width(), height());
 
   data = getBuffer(r, &inStride);
 
@@ -89,7 +103,7 @@ void PixelBuffer::getImage(const PixelFormat& pf, void* imageBuf,
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Source rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          r.width(), r.height(),
-                         r.tl.x, r.tl.y, width_, height_);
+                         r.tl.x, r.tl.y, width(), height());
 
   if (stride == 0)
     stride = r.width();
@@ -98,6 +112,17 @@ void PixelBuffer::getImage(const PixelFormat& pf, void* imageBuf,
 
   pf.bufferFromBuffer((U8*)imageBuf, format, srcBuffer, r.width(), r.height(),
                       stride, srcStride);
+}
+
+void PixelBuffer::setSize(int width, int height)
+{
+  if ((width < 0) || (width > maxPixelBufferWidth))
+    throw rfb::Exception("Invalid PixelBuffer width of %d pixels requested", width);
+  if ((height < 0) || (height > maxPixelBufferHeight))
+    throw rfb::Exception("Invalid PixelBuffer height of %d pixels requested", height);
+
+  width_ = width;
+  height_ = height;
 }
 
 // -=- Modifiable generic pixel buffer class
@@ -124,7 +149,7 @@ void ModifiablePixelBuffer::fillRect(const Rect& r, const void* pix)
 
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Destination rect %dx%d at %d,%d exceeds framebuffer %dx%d",
-                         r.width(), r.height(), r.tl.x, r.tl.y, width_, height_);
+                         r.width(), r.height(), r.tl.x, r.tl.y, width(), height());
 
   w = r.width();
   h = r.height();
@@ -175,7 +200,7 @@ void ModifiablePixelBuffer::imageRect(const Rect& r,
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Destination rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          r.width(), r.height(),
-                         r.tl.x, r.tl.y, width_, height_);
+                         r.tl.x, r.tl.y, width(), height());
 
   bytesPerPixel = getPF().bpp/8;
 
@@ -204,6 +229,7 @@ void ModifiablePixelBuffer::copyRect(const Rect &rect,
                                      const Point &move_by_delta)
 {
   int srcStride, dstStride;
+  int bytesPerPixel;
   const U8* srcData;
   U8* dstData;
 
@@ -213,13 +239,15 @@ void ModifiablePixelBuffer::copyRect(const Rect &rect,
   if (!drect.enclosed_by(getRect()))
     throw rfb::Exception("Destination rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          drect.width(), drect.height(),
-                         drect.tl.x, drect.tl.y, width_, height_);
+                         drect.tl.x, drect.tl.y, width(), height());
 
   srect = drect.translate(move_by_delta.negate());
   if (!srect.enclosed_by(getRect()))
     throw rfb::Exception("Source rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          srect.width(), srect.height(),
-                         srect.tl.x, srect.tl.y, width_, height_);
+                         srect.tl.x, srect.tl.y, width(), height());
+
+  bytesPerPixel = format.bpp/8;
 
   srcData = getBuffer(srect, &srcStride);
   dstData = getBufferRW(drect, &dstStride);
@@ -228,27 +256,27 @@ void ModifiablePixelBuffer::copyRect(const Rect &rect,
     // Possible overlap. Be careful and use memmove().
     int h = drect.height();
     while (h--) {
-      memmove(dstData, srcData, drect.width() * format.bpp/8);
-      dstData += dstStride * format.bpp/8;
-      srcData += srcStride * format.bpp/8;
+      memmove(dstData, srcData, drect.width() * bytesPerPixel);
+      dstData += dstStride * bytesPerPixel;
+      srcData += srcStride * bytesPerPixel;
     }
   } else if (move_by_delta.y < 0) {
     // The data shifted upwards. Copy from top to bottom.
     int h = drect.height();
     while (h--) {
-      memcpy(dstData, srcData, drect.width() * format.bpp/8);
-      dstData += dstStride * format.bpp/8;
-      srcData += srcStride * format.bpp/8;
+      memcpy(dstData, srcData, drect.width() * bytesPerPixel);
+      dstData += dstStride * bytesPerPixel;
+      srcData += srcStride * bytesPerPixel;
     }
   } else {
     // The data shifted downwards. Copy from bottom to top.
     int h = drect.height();
-    dstData += (h-1) * dstStride * format.bpp/8;
-    srcData += (h-1) * srcStride * format.bpp/8;
+    dstData += (h-1) * dstStride * bytesPerPixel;
+    srcData += (h-1) * srcStride * bytesPerPixel;
     while (h--) {
-      memcpy(dstData, srcData, drect.width() * format.bpp/8);
-      dstData -= dstStride * format.bpp/8;
-      srcData -= srcStride * format.bpp/8;
+      memcpy(dstData, srcData, drect.width() * bytesPerPixel);
+      dstData -= dstStride * bytesPerPixel;
+      srcData -= srcStride * bytesPerPixel;
     }
   }
 
@@ -272,7 +300,7 @@ void ModifiablePixelBuffer::imageRect(const PixelFormat& pf, const Rect &dest,
   if (!dest.enclosed_by(getRect()))
     throw rfb::Exception("Destination rect %dx%d at %d,%d exceeds framebuffer %dx%d",
                          dest.width(), dest.height(),
-                         dest.tl.x, dest.tl.y, width_, height_);
+                         dest.tl.x, dest.tl.y, width(), height());
 
   if (stride == 0)
     stride = dest.width();
@@ -301,10 +329,10 @@ rdr::U8* FullFramePixelBuffer::getBufferRW(const Rect& r, int* stride_)
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Pixel buffer request %dx%d at %d,%d exceeds framebuffer %dx%d",
                          r.width(), r.height(),
-                         r.tl.x, r.tl.y, width_, height_);
+                         r.tl.x, r.tl.y, width(), height());
 
   *stride_ = stride;
-  return &data[(r.tl.x + (r.tl.y * stride)) * format.bpp/8];
+  return &data[(r.tl.x + (r.tl.y * stride)) * (format.bpp/8)];
 }
 
 void FullFramePixelBuffer::commitBufferRW(const Rect& r)
@@ -316,55 +344,77 @@ const rdr::U8* FullFramePixelBuffer::getBuffer(const Rect& r, int* stride_) cons
   if (!r.enclosed_by(getRect()))
     throw rfb::Exception("Pixel buffer request %dx%d at %d,%d exceeds framebuffer %dx%d",
                          r.width(), r.height(),
-                         r.tl.x, r.tl.y, width_, height_);
+                         r.tl.x, r.tl.y, width(), height());
 
   *stride_ = stride;
-  return &data[(r.tl.x + (r.tl.y * stride)) * format.bpp/8];
+  return &data[(r.tl.x + (r.tl.y * stride)) * (format.bpp/8)];
+}
+
+void FullFramePixelBuffer::setBuffer(int width, int height,
+                                     rdr::U8* data_, int stride_)
+{
+  if ((width < 0) || (width > maxPixelBufferWidth))
+    throw rfb::Exception("Invalid PixelBuffer width of %d pixels requested", width);
+  if ((height < 0) || (height > maxPixelBufferHeight))
+    throw rfb::Exception("Invalid PixelBuffer height of %d pixels requested", height);
+  if ((stride_ < 0) || (stride_ > maxPixelBufferStride) || (stride_ < width))
+    throw rfb::Exception("Invalid PixelBuffer stride of %d pixels requested", stride_);
+  if ((width != 0) && (height != 0) && (data_ == NULL))
+    throw rfb::Exception("PixelBuffer requested without a valid memory area");
+
+  ModifiablePixelBuffer::setSize(width, height);
+  stride = stride_;
+  data = data_;
+}
+
+void FullFramePixelBuffer::setSize(int w, int h)
+{
+  // setBuffer() should be used
+  throw rfb::Exception("Invalid call to FullFramePixelBuffer::setSize()");
 }
 
 // -=- Managed pixel buffer class
 // Automatically allocates enough space for the specified format & area
 
 ManagedPixelBuffer::ManagedPixelBuffer()
-  : datasize(0)
+  : data_(NULL), datasize(0)
 {
-  checkDataSize();
-};
+}
 
 ManagedPixelBuffer::ManagedPixelBuffer(const PixelFormat& pf, int w, int h)
-  : FullFramePixelBuffer(pf, w, h, NULL, w), datasize(0)
+  : FullFramePixelBuffer(pf, 0, 0, NULL, 0), data_(NULL), datasize(0)
 {
-  checkDataSize();
-};
+  setSize(w, h);
+}
 
-ManagedPixelBuffer::~ManagedPixelBuffer() {
-  if (data) delete [] data;
-};
+ManagedPixelBuffer::~ManagedPixelBuffer()
+{
+  if (data_)
+    delete [] data_;
+}
 
+void ManagedPixelBuffer::setPF(const PixelFormat &pf)
+{
+  format = pf;
+  setSize(width(), height());
+}
 
-void
-ManagedPixelBuffer::setPF(const PixelFormat &pf) {
-  format = pf; checkDataSize();
-};
-void
-ManagedPixelBuffer::setSize(int w, int h) {
-  width_ = w; height_ = h; stride = w; checkDataSize();
-};
+void ManagedPixelBuffer::setSize(int w, int h)
+{
+  unsigned long new_datasize = w * h * (format.bpp/8);
 
-
-inline void
-ManagedPixelBuffer::checkDataSize() {
-  unsigned long new_datasize = width_ * height_ * (format.bpp/8);
+  new_datasize = w * h * (format.bpp/8);
   if (datasize < new_datasize) {
-    if (data) {
-      delete [] data;
-      datasize = 0; data = 0;
+    if (data_) {
+      delete [] data_;
+      data_ = NULL;
+      datasize = 0;
     }
     if (new_datasize) {
-      data = new U8[new_datasize];
-      if (!data)
-        throw Exception("rfb::ManagedPixelBuffer unable to allocate buffer");
+      data_ = new U8[new_datasize];
       datasize = new_datasize;
     }
   }
-};
+
+  setBuffer(w, h, data_, w);
+}

@@ -21,16 +21,19 @@
 
 #include <rdr/ZlibOutStream.h>
 #include <rdr/Exception.h>
+#include <rfb/LogWriter.h>
 
 #include <zlib.h>
 
 #undef ZLIBOUT_DEBUG
 
+static rfb::LogWriter vlog("ZlibOutStream");
+
 using namespace rdr;
 
 enum { DEFAULT_BUF_SIZE = 16384 };
 
-ZlibOutStream::ZlibOutStream(OutStream* os, int bufSize_, int compressLevel)
+ZlibOutStream::ZlibOutStream(OutStream* os, size_t bufSize_, int compressLevel)
   : underlying(os), compressionLevel(compressLevel), newLevel(compressLevel),
     bufSize(bufSize_ ? bufSize_ : DEFAULT_BUF_SIZE), offset(0)
 {
@@ -72,7 +75,7 @@ void ZlibOutStream::setCompressionLevel(int level)
   newLevel = level;
 }
 
-int ZlibOutStream::length()
+size_t ZlibOutStream::length()
 {
   return offset + ptr - start;
 }
@@ -85,7 +88,7 @@ void ZlibOutStream::flush()
   zs->avail_in = ptr - start;
 
 #ifdef ZLIBOUT_DEBUG
-  fprintf(stderr,"zos flush: avail_in %d\n",zs->avail_in);
+  vlog.debug("flush: avail_in %d",zs->avail_in);
 #endif
 
   // Force out everything from the zlib encoder
@@ -95,10 +98,10 @@ void ZlibOutStream::flush()
   ptr = start;
 }
 
-int ZlibOutStream::overrun(int itemSize, int nItems)
+size_t ZlibOutStream::overrun(size_t itemSize, size_t nItems)
 {
 #ifdef ZLIBOUT_DEBUG
-  fprintf(stderr,"zos overrun\n");
+  vlog.debug("overrun");
 #endif
 
   if (itemSize > bufSize)
@@ -106,7 +109,7 @@ int ZlibOutStream::overrun(int itemSize, int nItems)
 
   checkCompressionLevel();
 
-  while (end - ptr < itemSize) {
+  while ((size_t)(end - ptr) < itemSize) {
     zs->next_in = start;
     zs->avail_in = ptr - start;
 
@@ -120,15 +123,17 @@ int ZlibOutStream::overrun(int itemSize, int nItems)
     } else {
       // but didn't consume all the data?  try shifting what's left to the
       // start of the buffer.
-      fprintf(stderr,"z out buf not full, but in data not consumed\n");
+      vlog.info("z out buf not full, but in data not consumed");
       memmove(start, zs->next_in, ptr - zs->next_in);
       offset += zs->next_in - start;
       ptr -= zs->next_in - start;
     }
   }
 
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
+  size_t nAvail;
+  nAvail = (end - ptr) / itemSize;
+  if (nAvail < nItems)
+    return nAvail;
 
   return nItems;
 }
@@ -149,8 +154,8 @@ void ZlibOutStream::deflate(int flush)
     zs->avail_out = underlying->getend() - underlying->getptr();
 
 #ifdef ZLIBOUT_DEBUG
-    fprintf(stderr,"zos: calling deflate, avail_in %d, avail_out %d\n",
-            zs->avail_in,zs->avail_out);
+    vlog.debug("calling deflate, avail_in %d, avail_out %d",
+               zs->avail_in,zs->avail_out);
 #endif
 
     rc = ::deflate(zs, flush);
@@ -163,8 +168,8 @@ void ZlibOutStream::deflate(int flush)
     }
 
 #ifdef ZLIBOUT_DEBUG
-    fprintf(stderr,"zos: after deflate: %d bytes\n",
-            zs->next_out-underlying->getptr());
+    vlog.debug("after deflate: %d bytes",
+               zs->next_out-underlying->getptr());
 #endif
 
     underlying->setptr(zs->next_out);
@@ -177,7 +182,7 @@ void ZlibOutStream::checkCompressionLevel()
 
   if (newLevel != compressionLevel) {
 #ifdef ZLIBOUT_DEBUG
-    fprintf(stderr,"zos change: avail_in %d\n",zs->avail_in);
+    vlog.debug("change: avail_in %d",zs->avail_in);
 #endif
 
     // zlib is just horribly stupid. It does an implicit flush on
