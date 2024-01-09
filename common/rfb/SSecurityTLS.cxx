@@ -201,7 +201,7 @@ void SSecurityTLS::setParams(gnutls_session_t session)
   if (gnutls_dh_params_init(&dh_params) != GNUTLS_E_SUCCESS)
     throw AuthFailureException("gnutls_dh_params_init failed");
 
-  if (gnutls_dh_params_generate2(dh_params, DH_BITS) != GNUTLS_E_SUCCESS)
+  if (gnutls_dh_params_generate2(dh_params, gnutls_sec_param_to_pk_bits(GNUTLS_PK_DH, GNUTLS_SEC_PARAM_MEDIUM)) != GNUTLS_E_SUCCESS)
     throw AuthFailureException("gnutls_dh_params_generate2 failed");
 
   if (anon) {

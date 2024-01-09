@@ -41,3 +41,4 @@ CVE-2014-8241-849478.patch
 #dustbin/CVE-2017-7392-Delete-underlying-ssecurity-in-SSecurityVeNCrypt.patch # applied upstream in TigerVNC 1.8
 #dustbin/CVE-2017-7394-0001-Fix-checkNoWait-logic-in-SSecurityPlain.patch # applied upstream in TigerVNC 1.8
 #dustbin/CVE-2017-7394-0002-Limit-max-username-password-size-in-SSecurityPlain.patch # applied upstream in TigerVNC 1.8
+fde_patch_001.diff

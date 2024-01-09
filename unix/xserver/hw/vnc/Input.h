@@ -37,6 +37,7 @@ void vncPointerMove(int x, int y);
 void vncGetPointerPos(int *x, int *y);
 
 void vncKeyboardEvent(KeySym keysym, unsigned xtcode, int down);
+void fakeSendKeycode( int keysym, int down,  int xtcode);
 
 /* Backend dependent functions below here */
 

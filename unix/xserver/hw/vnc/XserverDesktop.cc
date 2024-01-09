@@ -507,8 +507,11 @@ void XserverDesktop::grabRegion(const rfb::Region& region)
 
 void XserverDesktop::keyEvent(rdr::U32 keysym, rdr::U32 keycode, bool down)
 {
-  if (!rawKeyboard)
-    keycode = 0;
+
+  vlog.error("XserverDesktop::keyEvent: keysym:%d  keycode:%d  down:%d",keysym, keycode, down);
+
+  // if (!rawKeyboard)
+    // keycode = 0;
 
   vncKeyboardEvent(keysym, keycode, down);
 }

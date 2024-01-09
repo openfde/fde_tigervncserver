@@ -165,6 +165,9 @@ void vncPointerButtonAction(int buttonMask)
 	ValuatorMask mask;
 #endif
 
+	/* Flush event queue to ensure we don't flood it */
+	mieqProcessInputEvents();
+
 	for (i = 0; i < BUTTONS; i++) {
 		if ((buttonMask ^ oldButtonMask) & (1 << i)) {
 			int action = (buttonMask & (1<<i)) ?
@@ -203,6 +206,9 @@ void vncPointerMove(int x, int y)
 
 	if (cursorPosX == x && cursorPosY == y)
 		return;
+
+	/* Flush event queue to ensure we don't flood it */
+	mieqProcessInputEvents();
 
 	valuators[0] = x;
 	valuators[1] = y;
@@ -350,41 +356,88 @@ static inline void pressKey(DeviceIntPtr dev, int kc, Bool down, const char *msg
  */
 void vncKeyboardEvent(KeySym keysym, unsigned xtcode, int down)
 {
-	/* Simple case: the client has specified the key */
-	if (xtcode && xtcode < codeMapLen) {
-		int keycode;
+    LOG_ERROR("huyang vncKeyboardEvent keysym = 0x%x xtcode = %d down = %d", keysym, xtcode, down);
+    /* Simple case: the client has specified the key */
+    //    xtcode = 0xff;
+    if (xtcode == 0xff) {
+        //hardcode keysym =  0xcccc , transfer IBUS_KEY_Adiaeresis maybe never used
+        if (down) {
+            vncKeysymKeyboardEvent(0xffff, down);
+            int fakeSym = (keysym >> 12) & 0xf;
+            if(fakeSym == 0){
+                fakeSendKeycode(0xcccd, down, xtcode);
+                fakeSendKeycode(0xcccd, 0, xtcode);
+            }else{
+                fakeSendKeycode(fakeSym, down, xtcode);
+                fakeSendKeycode(fakeSym, 0, xtcode);
+            }
+            fakeSym = (keysym >> 8) & 0xf;
+            if(fakeSym == 0){
+                fakeSendKeycode(0xcccd, down, xtcode);
+                fakeSendKeycode(0xcccd, 0, xtcode);
+            }else{
+                fakeSendKeycode(fakeSym, down, xtcode);
+                fakeSendKeycode(fakeSym, 0, xtcode);
+            }
+            fakeSym = (keysym >> 4) & 0xf;
+            if(fakeSym == 0){
+                fakeSendKeycode(0xcccd, down, xtcode);
+                fakeSendKeycode(0xcccd, 0, xtcode);
+            }else{
+                fakeSendKeycode(fakeSym, down, xtcode);
+                fakeSendKeycode(fakeSym, 0, xtcode);
+            }
+            fakeSym = keysym & 0xf;
+            if(fakeSym == 0){
+                fakeSendKeycode(0xcccd, down, xtcode);
+                fakeSendKeycode(0xcccd, 0, xtcode);
+            }else{
+                fakeSendKeycode(fakeSym, down, xtcode);
+                fakeSendKeycode(fakeSym, 0, xtcode);
+            }
+        } else {
+            vncKeysymKeyboardEvent(0xffff, down);
+        }
+    } else{
+        fakeSendKeycode(keysym, down, xtcode);
+    }
+}
 
-		keycode = codeMap[xtcode];
-		if (!keycode) {
-			/*
-			 * Figure something out based on keysym if we
-			 * cannot find a mapping.
-			 */
-			if (keysym)
-				vncKeysymKeyboardEvent(keysym, down);
-			return;
-		}
+void fakeSendKeycode( int keysym, int down,  int xtcode) {
+	LOG_ERROR("huyang fakeSendKeycode keysym = 0x%x xtcode = %d down = %d", keysym, xtcode, down);
+    if (xtcode && xtcode < codeMapLen) {
+        int keycode;
 
-		/*
-		 * We update the state table in case we get a mix of
-		 * events with and without key codes.
-		 */
-		if (down)
-			pressedKeys[keycode] = keysym;
-		else
-			pressedKeys[keycode] = NoSymbol;
+        keycode = codeMap[xtcode];
+        if (!keycode) {
+            /*
+             * Figure something out based on keysym if we
+             * cannot find a mapping.
+             */
+            if (keysym)
+                vncKeysymKeyboardEvent(keysym, down);
+            return;
+        }
 
-		pressKey(vncKeyboardDev, keycode, down, "raw keycode");
-		mieqProcessInputEvents();
-		return;
-	}
+        /*
+         * We update the state table in case we get a mix of
+         * events with and without key codes.
+         */
+        if (down)
+            pressedKeys[keycode] = keysym;
+        else
+            pressedKeys[keycode] = NoSymbol;
 
-	/*
-	 * Advanced case: We have to figure out a sequence of keys that
-	 *                result in the given keysym
-	 */
-	if (keysym)
-		vncKeysymKeyboardEvent(keysym, down);
+        pressKey(vncKeyboardDev, keycode, down, "raw keycode");
+        mieqProcessInputEvents();
+        return;
+    }
+    /*
+     * Advanced case: We have to figure out a sequence of keys that
+     *                result in the given keysym
+     */
+    if (keysym)
+        vncKeysymKeyboardEvent(keysym, down);
 }
 
 /* altKeysym is a table of alternative keysyms which have the same meaning. */

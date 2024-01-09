@@ -189,10 +189,16 @@ void SMsgReader::readFence()
 
 void SMsgReader::readKeyEvent()
 {
+  // bool down = is->readU8();
+  // is->skip(2);
+  // rdr::U32 key = is->readU32();
+  // handler->keyEvent(key, 0, down);
+
   bool down = is->readU8();
-  is->skip(2);
+  rdr::U32 keycode = is->readU16();
+//    is->skip(2);
   rdr::U32 key = is->readU32();
-  handler->keyEvent(key, 0, down);
+  handler->keyEvent(key, keycode, down);
 }
 
 void SMsgReader::readPointerEvent()

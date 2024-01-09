@@ -1003,6 +1003,8 @@ miRegionOp(
 	    newReg->size = 1;
 	    Xfree(newReg->rects);
 	    newReg->rects = Xmalloc(sizeof(BoxRec));
+	    if (! newReg->rects )
+	      newReg->size = 0;
 	}
     }
     Xfree (oldRects);

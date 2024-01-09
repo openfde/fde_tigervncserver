@@ -197,7 +197,7 @@ static void init_fltk()
 
   // Proper Gnome Shell integration requires that we set a sensible
   // WM_CLASS for the window.
-  Fl_Window::default_xclass("vncviewer");
+  Fl_Window::default_xclass("TigerVNC Viewer");
 
   // Set the default icon for all windows.
 #ifdef WIN32
@@ -369,6 +369,11 @@ static void usage(const char *programName)
           "  -geometry geometry - Initial position of the main VNC viewer window. See the\n"
           "                       man page for details.\n");
 #endif
+
+  fprintf(stderr,"\n"
+	  "Options:\n\n"
+	  "  -display Xdisplay - Specifies the X display for the viewer window\n"
+	  "  -geometry geometry - Standard X position and sizing specification.\n");
 
   fprintf(stderr,"\n"
           "Parameters can be turned on with -<param> or off with -<param>=0\n"

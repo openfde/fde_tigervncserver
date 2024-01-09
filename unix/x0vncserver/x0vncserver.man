@@ -20,7 +20,7 @@ will fall back to polling the screen for changes.
 .SH OPTIONS
 .B x0vncserver
 interprets the command line as a list of parameters with optional values.
-Running \fBx0vncserver -h\fP will show a list of all valid parameters with
+Running \fBx0vncserver \-h\fP will show a list of all valid parameters with
 short descriptions.  All parameters are optional, but normally you would have
 to use the \fBPasswordFile\fP parameter (see its description below).
 .PP
@@ -84,7 +84,7 @@ is \fB*:stderr:30\fP.
 .
 .TP
 .B \-HostsFile \fIfilename\fP
-This parameter allows to specify a file name with IP access control rules.
+This parameter allows one to specify a file name with IP access control rules.
 The file should include one rule per line, and the rule format is one of the
 following: +\fIaddress\fP/\fIprefix\fP (accept connections from the
 specified address group), -\fIaddress\fP/\fIprefix\fP (reject connections)
