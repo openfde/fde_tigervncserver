@@ -362,7 +362,7 @@ void vncKeyboardEvent(KeySym keysym, unsigned xtcode, int down)
     if (xtcode == 0xff) {
         //hardcode keysym =  0xcccc , transfer IBUS_KEY_Adiaeresis maybe never used
         if (down) {
-            vncKeysymKeyboardEvent(0xffff, down);
+            vncKeysymKeyboardEvent(0xcccc, down);
             int fakeSym = (keysym >> 12) & 0xf;
             if(fakeSym == 0){
                 fakeSendKeycode(0xcccd, down, xtcode);
@@ -396,7 +396,7 @@ void vncKeyboardEvent(KeySym keysym, unsigned xtcode, int down)
                 fakeSendKeycode(fakeSym, 0, xtcode);
             }
         } else {
-            vncKeysymKeyboardEvent(0xffff, down);
+            vncKeysymKeyboardEvent(0xcccc, down);
         }
     } else{
         fakeSendKeycode(keysym, down, xtcode);
